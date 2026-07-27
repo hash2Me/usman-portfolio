@@ -22,7 +22,7 @@ export default function Footer() {
           >
             LinkedIn
           </a>
-          <a href="#top" className="text-sm font-medium text-accent hover:text-accent-hover transition-colors">
+          <a href="#top" className="text-sm font-medium text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all">
             Back to top ↑
           </a>
         </div>

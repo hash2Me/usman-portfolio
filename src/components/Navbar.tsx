@@ -40,7 +40,7 @@ export default function Navbar() {
           href="#top"
           className="font-mono text-base font-bold text-white tracking-tight hover:scale-105 transition-transform"
         >
-          usman<span className="text-accent animate-pulse">_</span>
+          usman<span className="text-white animate-pulse">_</span>
         </a>
 
         {/* Desktop nav */}
@@ -49,7 +49,7 @@ export default function Navbar() {
             <li key={link.href}>
               <a
                 href={link.href}
-                className="text-sm font-medium text-slate-300 hover:text-white hover:text-shadow-glow transition-all"
+                className="text-sm font-medium text-slate-300 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all"
               >
                 {link.label}
               </a>

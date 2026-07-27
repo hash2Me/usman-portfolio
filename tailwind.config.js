@@ -18,9 +18,9 @@ export default {
           50: '#f8fafc',
         },
         accent: {
-          DEFAULT: '#8b5cf6', // Violet
-          hover: '#7c3aed',
-          subtle: 'rgba(139, 92, 246, 0.1)',
+          DEFAULT: '#ffffff', // Clean white accent for minimalism
+          hover: '#e2e8f0',
+          subtle: 'rgba(255, 255, 255, 0.1)',
         },
       },
       fontFamily: {
@@ -48,8 +48,8 @@ export default {
       },
       boxShadow: {
         glass: '0 8px 32px 0 rgba(0, 0, 0, 0.3)',
-        glow: '0 0 20px rgba(139, 92, 246, 0.3)',
-        'glow-strong': '0 0 30px rgba(139, 92, 246, 0.5)',
+        glow: '0 0 20px rgba(255, 255, 255, 0.15)',
+        'glow-strong': '0 0 30px rgba(255, 255, 255, 0.25)',
       },
       borderRadius: {
         DEFAULT: '1rem',
