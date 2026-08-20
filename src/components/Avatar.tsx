@@ -14,7 +14,6 @@ const POSE_IMAGES: Record<Pose, string> = {
   sitting: sittingImg,
 };
 
-/** Section-aware speech lines — avatar says relevant things based on what's nearby */
 const SECTION_SPEECH: Record<string, string[]> = {
   hero: [
     "Welcome to my portfolio! ☕",
@@ -81,7 +80,6 @@ const MAX_STAIR_STEPS = 3;
 const AVATAR_SIZE = 64;
 const SITTING_WIDTH = 110;
 const SITTING_HEIGHT = 72;
-const SPEED = 0.8;
 
 /* ────────────────────── Helper: detect visible section ────────────── */
 
@@ -99,8 +97,7 @@ function getVisibleSection(): string {
 /* ────────────────────────── Avatar Component ──────────────────────── */
 
 export default function Avatar() {
-  // All mutable animation state lives in refs to avoid re-renders and effect restarts
-  const posXRef = useRef(0);
+  const posXRef = useRef(-80);
   const posYRef = useRef(0);
   const targetYRef = useRef(0);
   const dirRef = useRef<Direction>('right');
@@ -108,19 +105,24 @@ export default function Avatar() {
   const isMovingRef = useRef(true);
   const idleCounterRef = useRef(0);
   const stairCounterRef = useRef(0);
-  const animFrameRef = useRef<number>(0);
+  const animFrameRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const avatarImgRef = useRef<HTMLDivElement>(null);
   const speechTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const poseTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Only these trigger re-renders (for UI changes)
+  // Walk cycle physics
+  const walkCycleRef = useRef(0);       // Continuous walk phase (radians)
+  const currentSpeedRef = useRef(0);     // Smoothed speed (eases in/out)
+  const targetSpeedRef = useRef(0.9);    // Desired speed
+
   const [pose, setPose] = useState<Pose>('walking');
   const [direction, setDirection] = useState<Direction>('right');
   const [speech, setSpeech] = useState('');
   const [showSpeech, setShowSpeech] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  // ── Speech bubble ──
+  // ── Speech ──
   const showSpeechBubble = (text: string) => {
     setSpeech(text);
     setShowSpeech(true);
@@ -130,89 +132,83 @@ export default function Avatar() {
 
   const showRandomSpeech = (p: Pose) => {
     const section = getVisibleSection();
-    // 50% chance to say something section-relevant, 50% idle chatter
     const pool = Math.random() < 0.5 && SECTION_SPEECH[section]
       ? SECTION_SPEECH[section]
       : IDLE_SPEECH[p];
     showSpeechBubble(pool[Math.floor(Math.random() * pool.length)]);
   };
 
-  // ── Idle system ──
+  // ── Idle ──
   const goIdle = () => {
     const idlePoses: Pose[] = ['phone', 'sitting'];
     const newPose = idlePoses[Math.floor(Math.random() * idlePoses.length)];
     isMovingRef.current = false;
+    targetSpeedRef.current = 0; // Decelerate to stop
     setPose(newPose);
     showRandomSpeech(newPose);
 
-    // Resume walking after 5-9 seconds
     if (poseTimeoutRef.current) clearTimeout(poseTimeoutRef.current);
     poseTimeoutRef.current = setTimeout(() => {
       isMovingRef.current = true;
+      targetSpeedRef.current = 0.7 + Math.random() * 0.4; // Slightly varied speed
       setPose('walking');
       showRandomSpeech('walking');
     }, 5000 + Math.random() * 4000);
   };
 
-  // ── Main animation loop (runs once, never restarts) ──
+  // ── Main animation loop ──
   useEffect(() => {
-    // Entrance: start off-screen left, become visible after 1.5s
-    posXRef.current = -80;
     const introTimer = setTimeout(() => setIsVisible(true), 1500);
-
     const IDLE_THRESHOLD = 400 + Math.floor(Math.random() * 300);
 
     const animate = () => {
       const el = containerRef.current;
-      if (!el) {
+      const avatarEl = avatarImgRef.current;
+      if (!el || !avatarEl) {
         animFrameRef.current = requestAnimationFrame(animate);
         return;
       }
 
       const maxX = window.innerWidth - 90;
 
-      // ── Idle check ──
-      if (!isMovingRef.current) {
-        // Smoothly interpolate Y toward target (for stair transitions)
-        const currentY = posYRef.current;
-        const diff = targetYRef.current - currentY;
-        if (Math.abs(diff) > 0.5) {
-          posYRef.current += diff * 0.1;
-        }
-        el.style.left = `${posXRef.current}px`;
-        el.style.bottom = `${20 + posYRef.current}px`;
-        animFrameRef.current = requestAnimationFrame(animate);
-        return;
+      // ── Smooth speed interpolation (ease in/out of movement) ──
+      const speedDiff = targetSpeedRef.current - currentSpeedRef.current;
+      currentSpeedRef.current += speedDiff * 0.04; // Gentle acceleration/deceleration
+      const speed = currentSpeedRef.current;
+      const isEffectivelyMoving = Math.abs(speed) > 0.05;
+
+      // ── Walk cycle ──
+      if (isEffectivelyMoving) {
+        walkCycleRef.current += speed * 0.12; // Walk phase advances with speed
+        idleCounterRef.current++;
+        stairCounterRef.current++;
       }
 
-      idleCounterRef.current++;
-      stairCounterRef.current++;
-
-      // ── Random idle trigger ──
-      if (idleCounterRef.current > IDLE_THRESHOLD && Math.random() < 0.004) {
+      // ── Idle trigger ──
+      if (isMovingRef.current && idleCounterRef.current > IDLE_THRESHOLD && Math.random() < 0.004) {
         idleCounterRef.current = 0;
         goIdle();
-        animFrameRef.current = requestAnimationFrame(animate);
-        return;
       }
 
-      // ── Movement ──
-      if (dirRef.current === 'right') {
-        posXRef.current += SPEED;
-        if (posXRef.current >= maxX) {
-          dirRef.current = 'left';
-          setDirection('left');
-        }
-      } else {
-        posXRef.current -= SPEED;
-        if (posXRef.current <= 0) {
-          dirRef.current = 'right';
-          setDirection('right');
+      // ── X movement ──
+      if (isMovingRef.current) {
+        if (dirRef.current === 'right') {
+          posXRef.current += speed;
+          if (posXRef.current >= maxX) {
+            dirRef.current = 'left';
+            setDirection('left');
+          }
+        } else {
+          posXRef.current -= speed;
+          if (posXRef.current <= 0) {
+            dirRef.current = 'right';
+            setDirection('right');
+          }
         }
       }
 
       // ── Stairs ──
-      if (stairCounterRef.current > 250 && Math.random() < 0.002) {
+      if (isMovingRef.current && stairCounterRef.current > 250 && Math.random() < 0.002) {
         stairCounterRef.current = 0;
         if (stairStepRef.current < MAX_STAIR_STEPS && Math.random() > 0.35) {
           stairStepRef.current++;
@@ -222,21 +218,35 @@ export default function Avatar() {
         targetYRef.current = stairStepRef.current * STAIR_HEIGHT;
       }
 
-      // ── Smooth Y interpolation for stair climbing ──
-      const currentY = posYRef.current;
-      const diff = targetYRef.current - currentY;
-      if (Math.abs(diff) > 0.5) {
-        posYRef.current += diff * 0.08;
+      // ── Smooth Y interpolation ──
+      const yDiff = targetYRef.current - posYRef.current;
+      if (Math.abs(yDiff) > 0.3) {
+        posYRef.current += yDiff * 0.06;
       } else {
         posYRef.current = targetYRef.current;
       }
 
-      // ── Random walking speech ──
-      if (Math.random() < 0.0008) {
+      // ── Natural walk physics applied to avatar image ──
+      const phase = walkCycleRef.current;
+
+      // Vertical bob: up-down with each step (sinusoidal)
+      const bobY = isEffectivelyMoving ? Math.sin(phase * 2) * 3 : 0;
+
+      // Body lean: slight tilt in walk direction
+      const lean = isEffectivelyMoving ? Math.sin(phase) * 1.5 : 0;
+
+      // Shoulder sway: subtle horizontal micro-shift
+      const swayX = isEffectivelyMoving ? Math.cos(phase) * 1.2 : 0;
+
+      // Apply natural walk transforms to the avatar image
+      avatarEl.style.transform = `translateY(${-bobY}px) translateX(${swayX}px) rotate(${lean}deg)`;
+
+      // ── Random speech ──
+      if (isMovingRef.current && Math.random() < 0.0008) {
         showRandomSpeech('walking');
       }
 
-      // ── Apply position directly to DOM (no re-render) ──
+      // ── Apply container position ──
       el.style.left = `${posXRef.current}px`;
       el.style.bottom = `${20 + posYRef.current}px`;
 
@@ -252,7 +262,7 @@ export default function Avatar() {
       if (poseTimeoutRef.current) clearTimeout(poseTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty — runs once, all state is in refs
+  }, []);
 
   if (!isVisible) return null;
 
@@ -266,7 +276,7 @@ export default function Avatar() {
       className={`fixed z-[60] pointer-events-none transition-opacity duration-1000 hidden md:block ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
-      style={{ left: 0, bottom: 20 }}
+      style={{ left: -80, bottom: 20 }}
       aria-hidden="true"
     >
       {/* Speech bubble */}
@@ -278,49 +288,24 @@ export default function Avatar() {
         }`}
       >
         {speech}
-        {/* Tail */}
         <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-slate-900/90 border-r border-b border-white/15" />
       </div>
 
-      {/* Ground shadow */}
+      {/* Ground shadow — moves & stretches with walk cycle */}
       <div
-        className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/5 blur-sm"
-        style={{ width: isSitting ? 90 : 40, height: 6 }}
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/[0.04] blur-sm transition-all duration-200"
+        style={{ width: isSitting ? 90 : 44, height: 5 }}
       />
 
-      {/* Stair steps */}
-      {stairStepRef.current > 0 && (
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex flex-col-reverse items-center">
-          {Array.from({ length: stairStepRef.current }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-white/[0.04] border border-white/[0.08] rounded-sm"
-              style={{
-                width: 28 + i * 6,
-                height: 3,
-                marginTop: 1,
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Avatar character */}
+      {/* Avatar character wrapper — handles direction flip */}
       <div
-        className="relative"
         style={{
           transform: direction === 'left' ? 'scaleX(-1)' : 'scaleX(1)',
-          transition: 'transform 0.15s ease',
+          transition: 'transform 0.2s ease',
         }}
       >
-        {/* Walking bobble — gentle 2px bounce */}
-        <div
-          style={{
-            animation: pose === 'walking'
-              ? 'avatarBobble 0.4s ease-in-out infinite alternate'
-              : 'none',
-          }}
-        >
+        {/* Inner wrapper — walk physics applied here via ref */}
+        <div ref={avatarImgRef} style={{ transition: pose !== 'walking' ? 'transform 0.4s ease' : 'none' }}>
           <img
             src={POSE_IMAGES[pose]}
             alt=""
@@ -335,14 +320,6 @@ export default function Avatar() {
           />
         </div>
       </div>
-
-      {/* Walking bobble keyframe (injected once) */}
-      <style>{`
-        @keyframes avatarBobble {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(-2px); }
-        }
-      `}</style>
     </div>
   );
 }
