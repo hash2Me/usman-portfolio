@@ -6,10 +6,12 @@ import Skills from './components/Skills';
 import Education from './components/Education';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
+import AnimatedBackground from './components/AnimatedBackground';
+import Avatar from './components/Avatar';
 
 export default function App() {
   return (
-    <div id="top">
+    <div id="top" className="relative">
       {/* Skip link — first focusable element, visible on keyboard focus only */}
       <a
         href="#main-content"
@@ -18,9 +20,15 @@ export default function App() {
         Skip to main content
       </a>
 
+      {/* Global animated background */}
+      <AnimatedBackground />
+
+      {/* CEO Avatar that walks around the portfolio */}
+      <Avatar />
+
       <Navbar />
 
-      <main id="main-content">
+      <main id="main-content" className="relative z-10">
         <Hero />
         <Projects />
         <Experience />
