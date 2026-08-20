@@ -46,21 +46,21 @@ export default function Avatar() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
 
-  // Position & physics
-  const posXRef = useRef<number>(100);
-  const posYRef = useRef<number>(0); // Y relative to current section platform
+  // Viewport-relative coordinates (fixed positioning)
+  const posXRef = useRef<number>(120);
+  const posYRef = useRef<number>(200); // Fixed Y relative to viewport
   const velocityYRef = useRef<number>(0);
   const dirRef = useRef<Direction>('right');
   const stateRef = useRef<CharacterState>('walking');
   const walkPhaseRef = useRef<number>(0);
   
-  // Section platform tracking
+  // Section platform tracking (viewport-relative bounds)
   const activeSectionIdRef = useRef<string>('hero');
-  const platformBoundsRef = useRef<{ left: number; right: number; y: number }>({ left: 50, right: 800, y: 100 });
+  const platformBoundsRef = useRef<{ left: number; right: number; y: number }>({ left: 40, right: 600, y: 250 });
 
   // Portal transition states
   const isTeleportingRef = useRef<boolean>(false);
-  const portalPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const portalPosRef = useRef<{ x: number; y: number }>({ x: 120, y: 200 });
 
   // React state for rendering UI overlay
   const [characterState, setCharacterState] = useState<CharacterState>('walking');
@@ -68,7 +68,7 @@ export default function Avatar() {
   const [walkPhase, setWalkPhase] = useState<number>(0);
   const [speech, setSpeech] = useState<string>('');
   const [showSpeech, setShowSpeech] = useState<boolean>(false);
-  const [portalCoords, setPortalCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [portalCoords, setPortalCoords] = useState<{ x: number; y: number }>({ x: 120, y: 200 });
   const [portalScale, setPortalScale] = useState<number>(0);
   const [characterOpacity, setCharacterOpacity] = useState<number>(1);
 
@@ -89,10 +89,10 @@ export default function Avatar() {
     triggerSpeech(line);
   }, [triggerSpeech]);
 
-  // Find active section platform in viewport
+  // Calculate viewport-relative platform bounds for currently visible section
   const updateActiveSection = useCallback(() => {
     const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
-    const viewportMiddle = window.scrollY + window.innerHeight * 0.45;
+    const viewportMiddle = window.innerHeight * 0.45;
     
     let currentId = 'hero';
     let currentEl: HTMLElement | null = null;
@@ -101,10 +101,7 @@ export default function Avatar() {
       const el = document.getElementById(id) || (id === 'hero' ? document.getElementById('main-content') : null);
       if (el) {
         const rect = el.getBoundingClientRect();
-        const topAbs = window.scrollY + rect.top;
-        const bottomAbs = topAbs + rect.height;
-
-        if (viewportMiddle >= topAbs && viewportMiddle <= bottomAbs) {
+        if (rect.top <= viewportMiddle && rect.bottom >= 100) {
           currentId = id;
           currentEl = el;
           break;
@@ -121,11 +118,16 @@ export default function Avatar() {
       const contentContainer = currentEl.querySelector('.section') || currentEl;
       const cRect = contentContainer.getBoundingClientRect();
       
-      const left = Math.max(20, cRect.left + 20);
-      const right = Math.min(window.innerWidth - 60, cRect.right - 60);
-      const y = window.scrollY + rect.bottom - 40; // platform walk line near section bottom/container
+      const left = Math.max(30, cRect.left + 20);
+      const right = Math.min(window.innerWidth - 70, cRect.right - 70);
+      
+      // Calculate Y in viewport terms so character is ALWAYS visible on screen!
+      const targetScreenY = Math.min(
+        window.innerHeight - 100,
+        Math.max(120, rect.bottom - 60)
+      );
 
-      platformBoundsRef.current = { left, right, y };
+      platformBoundsRef.current = { left, right, y: targetScreenY };
     }
 
     return currentId;
@@ -147,7 +149,7 @@ export default function Avatar() {
     if (enterMode === 'jump') {
       stateRef.current = 'jumping';
       setCharacterState('jumping');
-      velocityYRef.current = -8;
+      velocityYRef.current = -7;
       triggerSpeech("Jumping into the portal! 🌀");
     } else {
       triggerSpeech("Entering portal... 🌀");
@@ -176,7 +178,7 @@ export default function Avatar() {
 
         if (exitMode === 'fall') {
           // Portal opens high above, character falls down
-          const highY = y - 180;
+          const highY = Math.max(60, y - 160);
           posYRef.current = highY;
           portalPosRef.current = { x: newX, y: highY + 20 };
           setPortalCoords(portalPosRef.current);
@@ -220,10 +222,9 @@ export default function Avatar() {
   // Handle scroll detection and random portal travel
   useEffect(() => {
     const handleScroll = () => {
-      if (isTeleportingRef.current) return;
       const newSection = updateActiveSection();
       
-      if (newSection !== activeSectionIdRef.current) {
+      if (!isTeleportingRef.current && newSection !== activeSectionIdRef.current) {
         activeSectionIdRef.current = newSection;
         const enterMode: PortalEnterType = Math.random() > 0.5 ? 'jump' : 'walk';
         const exitMode: PortalExitType = Math.random() > 0.5 ? 'fall' : 'walk';
@@ -232,7 +233,13 @@ export default function Avatar() {
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', updateActiveSection);
+    
+    // Initial placement setup
     updateActiveSection();
+    posXRef.current = platformBoundsRef.current.left + 50;
+    posYRef.current = platformBoundsRef.current.y;
+    triggerSpeech("Welcome to Usman's Portfolio! ☕");
 
     // Occasional portal teleport every 22 seconds if idle
     const portalInterval = setInterval(() => {
@@ -247,10 +254,11 @@ export default function Avatar() {
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', updateActiveSection);
       clearInterval(portalInterval);
       if (teleportTimerRef.current) clearTimeout(teleportTimerRef.current);
     };
-  }, [updateActiveSection, executePortalTeleport]);
+  }, [updateActiveSection, executePortalTeleport, triggerSpeech]);
 
   // Main 60fps Game Animation Loop
   useEffect(() => {
@@ -283,7 +291,7 @@ export default function Avatar() {
           // Keep character anchored smoothly to platform Y
           const yDiff = targetGroundY - posYRef.current;
           if (Math.abs(yDiff) > 1) {
-            posYRef.current += yDiff * 0.1;
+            posYRef.current += yDiff * 0.12;
           } else {
             posYRef.current = targetGroundY;
           }
@@ -291,7 +299,7 @@ export default function Avatar() {
 
         // 2. Horizontal walking on block platform bounds
         if (stateRef.current === 'walking') {
-          const walkSpeed = 65; // px per sec
+          const walkSpeed = 70; // px per sec
           walkPhaseRef.current += delta * 10;
           
           if (dirRef.current === 'right') {
@@ -323,7 +331,7 @@ export default function Avatar() {
           }
         }
 
-        // Update DOM transform directly for zero latency frame rendering
+        // Update DOM transform directly using FIXED viewport coordinates
         container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
         setWalkPhase(walkPhaseRef.current);
       }
@@ -342,7 +350,7 @@ export default function Avatar() {
     <>
       {/* Video Game Swirling Portal Component */}
       <div
-        className="fixed top-0 left-0 z-[70] pointer-events-none transition-all duration-500 ease-out"
+        className="fixed top-0 left-0 z-[100] pointer-events-none transition-all duration-500 ease-out"
         style={{
           transform: `translate3d(${portalCoords.x}px, ${portalCoords.y}px, 0) scale(${portalScale})`,
           opacity: portalScale > 0 ? 1 : 0,
@@ -350,18 +358,18 @@ export default function Avatar() {
       >
         <div className="relative w-16 h-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
           {/* Outer glowing vortex ring */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 via-cyan-400 to-white animate-spin blur-sm opacity-80" />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 via-cyan-400 to-white animate-spin blur-sm opacity-90" />
           {/* Inner swirling portal core */}
-          <div className="absolute w-12 h-16 rounded-full bg-slate-950 border-2 border-white shadow-[0_0_25px_rgba(255,255,255,0.8)] flex items-center justify-center overflow-hidden">
+          <div className="absolute w-12 h-16 rounded-full bg-slate-950 border-2 border-white shadow-[0_0_25px_rgba(255,255,255,0.9)] flex items-center justify-center overflow-hidden">
             <div className="w-full h-full bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-white via-cyan-400 to-purple-900 animate-pulse" />
           </div>
         </div>
       </div>
 
-      {/* Character Game Entity Container */}
+      {/* Character Game Entity Container - FIXED positioning for 100% viewport visibility */}
       <div
         ref={containerRef}
-        className="absolute top-0 left-0 z-[60] pointer-events-none transition-opacity duration-300 hidden md:block"
+        className="fixed top-0 left-0 z-[100] pointer-events-none transition-opacity duration-300 block"
         style={{
           opacity: characterOpacity,
           willChange: 'transform',
@@ -369,16 +377,16 @@ export default function Avatar() {
       >
         {/* Speech Bubble */}
         <div
-          className={`absolute -top-16 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 rounded-xl bg-slate-900/95 border border-white/20 backdrop-blur-md text-xs text-white font-mono shadow-2xl transition-all duration-300 ${
+          className={`absolute -top-16 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 rounded-xl bg-slate-900/95 border border-white/30 backdrop-blur-md text-xs text-white font-mono shadow-2xl transition-all duration-300 ${
             showSpeech ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90'
           }`}
         >
           {speech}
-          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-slate-900/95 border-r border-b border-white/20" />
+          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-slate-900/95 border-r border-b border-white/30" />
         </div>
 
         {/* Character Ground Shadow */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/40 rounded-full blur-xs" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-2.5 bg-black/60 rounded-full blur-xs" />
 
         {/* CSS Character Sprite */}
         <AvatarCharacter
