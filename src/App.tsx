@@ -8,6 +8,7 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import AnimatedBackground from './components/AnimatedBackground';
 import Avatar from './components/Avatar';
+import SectionDivider from './components/SectionDivider';
 
 export default function App() {
   return (
@@ -15,7 +16,7 @@ export default function App() {
       {/* Skip link — first focusable element, visible on keyboard focus only */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:rounded focus:border focus:border-slate-300 focus:text-sm"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:border-2 focus:border-black focus:text-black focus:font-bold focus:text-sm"
       >
         Skip to main content
       </a>
@@ -30,10 +31,15 @@ export default function App() {
 
       <main id="main-content" className="relative z-10">
         <Hero />
+        <SectionDivider />
         <Projects />
+        <SectionDivider />
         <Experience />
+        <SectionDivider />
         <Skills />
+        <SectionDivider />
         <Education />
+        <SectionDivider />
         <Contact />
       </main>
 

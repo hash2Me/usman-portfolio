@@ -6,7 +6,7 @@ export default function Projects() {
   const { ref, isVisible } = useScrollReveal();
 
   return (
-    <section id="projects" className="section relative border-t-4 border-black bg-white">
+    <section id="projects" className="section relative bg-white">
       <div ref={ref} className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         <div className="max-w-2xl relative z-10">
           <div className="inline-flex items-center gap-2 mb-4">

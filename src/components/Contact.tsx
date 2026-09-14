@@ -15,7 +15,7 @@ export default function Contact() {
   const { ref, isVisible } = useScrollReveal();
 
   return (
-    <section id="contact" className="section relative border-t-4 border-black pb-32 bg-white">
+    <section id="contact" className="section relative pb-32 bg-white">
       <div ref={ref} className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
         <div className="max-w-2xl relative z-10 mb-16">
           <div className="inline-flex items-center gap-2 mb-4">
