@@ -1,83 +1,108 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AvatarCharacter from './AvatarCharacter';
 
-type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'sitting';
+type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'waving' | 'dancing' | 'typing' | 'thinking' | 'dragged';
 type Direction = 'left' | 'right';
 
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const KONAMI_CODE = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+
+const POKE_REACTIONS = [
+  'Hey!', 'Stop that.', "I'm working here.", 'Quit poking me.',
+  '...', 'Again?', 'Do you mind?', "I'll fall off!",
+  'Rude.', 'OK fine.', 'What?', 'Cut it out.',
+];
+
 const SECTION_SPEECH: Record<string, string[]> = {
-  hero: [
-    "Welcome to Usman's Portfolio.",
-    "Scroll down to explore.",
-    "Engineered from scratch.",
-  ],
-  projects: [
-    "Inspecting project architecture...",
-    "Check out the technical depth.",
-    "Robust engineering in action.",
-  ],
-  experience: [
-    "Reviewing work history.",
-    "Production code, daily.",
-  ],
-  skills: [
-    "Skill matrix loaded.",
-    "C++ algorithms + React.",
-  ],
-  education: [
-    "Computer Science fundamentals.",
-    "Theory applied to real-world software.",
-  ],
-  contact: [
-    "Ready to build something?",
-    "Let's connect.",
-  ],
+  hero: ['Scroll down to explore.', 'Engineered from scratch.'],
+  projects: ['Inspecting project architecture.', 'Check the technical depth.'],
+  experience: ['Reviewing work history.', 'Production code, daily.'],
+  skills: ['Skill matrix loaded.', 'C++ algorithms + React.'],
+  education: ['CS fundamentals.', 'Theory applied to real software.'],
+  contact: ['Ready to build something?', "Let's connect."],
 };
+
+const POKE_STORAGE_KEY = 'avatar-poke-count';
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function getTimeGreeting(): string {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return "Good morning. Coffee's ready.";
+  if (h >= 12 && h < 17) return 'Good afternoon. Welcome.';
+  if (h >= 17 && h < 21) return 'Good evening. Still coding.';
+  return 'Working late. Welcome.';
+}
+
+function getSectionIdleState(sectionId: string): CharacterState {
+  switch (sectionId) {
+    case 'projects': return 'typing';
+    case 'experience': return 'phone';
+    case 'skills': return 'thinking';
+    case 'education': return 'thinking';
+    case 'contact': return 'waving';
+    default: return 'idle';
+  }
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
 
 export default function Avatar() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
 
-  // Physics refs — mutated in rAF, never cause re-renders
-  const posXRef = useRef<number>(120);
-  const posYRef = useRef<number>(200);
-  const velocityYRef = useRef<number>(0);
+  // Physics refs — mutated at 60fps, never cause re-renders
+  const posXRef = useRef(120);
+  const posYRef = useRef(200);
+  const velocityXRef = useRef(0);
+  const velocityYRef = useRef(0);
   const dirRef = useRef<Direction>('right');
   const stateRef = useRef<CharacterState>('walking');
-  const walkPhaseRef = useRef<number>(0);
+  const walkPhaseRef = useRef(0);
 
-  // Platform tracking
-  const activeSectionIdRef = useRef<string>('hero');
-  const platformBoundsRef = useRef<{ left: number; right: number; y: number }>({ left: 40, right: 600, y: 250 });
+  // Platform
+  const activeSectionIdRef = useRef('hero');
+  const platformBoundsRef = useRef({ left: 40, right: 600, y: 250 });
 
-  // Cursor lean — subtle head-tilt toward mouse
-  const cursorXRef = useRef<number>(0);
+  // Cursor
+  const cursorXRef = useRef(0);
+
+  // Drag
+  const isDraggingRef = useRef(false);
+  const wasDraggedRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const mouseHistoryRef = useRef<{ x: number; y: number; t: number }[]>([]);
 
   // Portal
-  const isTeleportingRef = useRef<boolean>(false);
+  const isTeleportingRef = useRef(false);
   const teleportTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // React state for rendering
+  // Konami
+  const konamiIndexRef = useRef(0);
+
+  // Poke count
+  const pokeCountRef = useRef(0);
+
+  // Click vs double-click disambiguation
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // React state (rendering only)
   const [characterState, setCharacterState] = useState<CharacterState>('walking');
   const [direction, setDirection] = useState<Direction>('right');
-  const [walkPhase, setWalkPhase] = useState<number>(0);
-  const [speech, setSpeech] = useState<string>('');
-  const [showSpeech, setShowSpeech] = useState<boolean>(false);
-  const [characterOpacity, setCharacterOpacity] = useState<number>(1);
-  const [portalCoords, setPortalCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [portalVisible, setPortalVisible] = useState<boolean>(false);
+  const [walkPhase, setWalkPhase] = useState(0);
+  const [cursorOffset, setCursorOffset] = useState(0);
+  const [speech, setSpeech] = useState('');
+  const [showSpeech, setShowSpeech] = useState(false);
+  const [characterOpacity, setCharacterOpacity] = useState(1);
+  const [portalCoords, setPortalCoords] = useState({ x: 0, y: 0 });
+  const [portalVisible, setPortalVisible] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const speechTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Hide on mobile (<640px)
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+  // ── Speech ─────────────────────────────────────────────────────────────────
 
-  // Speech bubble
   const triggerSpeech = useCallback((text: string) => {
     setSpeech(text);
     setShowSpeech(true);
@@ -90,11 +115,11 @@ export default function Avatar() {
     triggerSpeech(lines[Math.floor(Math.random() * lines.length)]);
   }, [triggerSpeech]);
 
-  // Platform bounds from viewport
+  // ── Platform bounds ────────────────────────────────────────────────────────
+
   const updateActiveSection = useCallback(() => {
     const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
     const viewportMiddle = window.innerHeight * 0.45;
-
     let currentId = 'hero';
     let currentEl: HTMLElement | null = null;
 
@@ -109,46 +134,33 @@ export default function Avatar() {
         }
       }
     }
-
-    if (!currentEl) {
-      currentEl = document.getElementById('hero') || document.body;
-    }
+    if (!currentEl) currentEl = document.getElementById('hero') || document.body;
 
     if (currentEl) {
       const rect = currentEl.getBoundingClientRect();
-      const contentContainer = currentEl.querySelector('.section') || currentEl;
-      const cRect = contentContainer.getBoundingClientRect();
-
+      const cRect = (currentEl.querySelector('.section') || currentEl).getBoundingClientRect();
       const left = Math.max(30, cRect.left + 20);
       const right = Math.min(window.innerWidth - 70, cRect.right - 70);
-      const targetScreenY = Math.min(window.innerHeight - 100, Math.max(120, rect.bottom - 60));
-
-      platformBoundsRef.current = { left, right, y: targetScreenY };
+      const y = Math.min(window.innerHeight - 100, Math.max(120, rect.bottom - 60));
+      platformBoundsRef.current = { left, right, y };
     }
-
     return currentId;
   }, []);
 
-  // Teleport — clean monochrome portal
+  // ── Teleport ───────────────────────────────────────────────────────────────
+
   const executePortalTeleport = useCallback((targetSectionId: string) => {
-    if (isTeleportingRef.current) return;
+    if (isTeleportingRef.current || isDraggingRef.current) return;
     isTeleportingRef.current = true;
 
-    // Show entrance portal
-    const startX = posXRef.current;
-    const startY = posYRef.current;
-    setPortalCoords({ x: startX + (dirRef.current === 'right' ? 30 : -30), y: startY });
+    setPortalCoords({ x: posXRef.current + (dirRef.current === 'right' ? 30 : -30), y: posYRef.current });
     setPortalVisible(true);
     triggerSpeech('Teleporting...');
 
-    // Character disappears
     teleportTimerRef.current = setTimeout(() => {
       setCharacterOpacity(0);
-
       setTimeout(() => {
         setPortalVisible(false);
-
-        // Scroll to new section
         activeSectionIdRef.current = targetSectionId;
         const targetEl = document.getElementById(targetSectionId);
         if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -158,10 +170,8 @@ export default function Avatar() {
           const { left, right, y } = platformBoundsRef.current;
           const newX = left + (right - left) * 0.3;
 
-          // Exit portal at destination
           setPortalCoords({ x: newX, y: Math.max(60, y - 120) });
           setPortalVisible(true);
-
           posXRef.current = newX;
           posYRef.current = Math.max(60, y - 120);
           dirRef.current = 'right';
@@ -172,7 +182,7 @@ export default function Avatar() {
             stateRef.current = 'falling';
             setCharacterState('falling');
             velocityYRef.current = 2;
-
+            velocityXRef.current = 0;
             setTimeout(() => {
               setPortalVisible(false);
               triggerSectionSpeech(targetSectionId);
@@ -183,18 +193,161 @@ export default function Avatar() {
     }, 500);
   }, [triggerSpeech, triggerSectionSpeech, updateActiveSection]);
 
-  // Cursor tracking
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => { cursorXRef.current = e.clientX; };
-    window.addEventListener('mousemove', onMove, { passive: true });
-    return () => window.removeEventListener('mousemove', onMove);
+  // ── Interaction handlers ───────────────────────────────────────────────────
+
+  // 1. CLICK — jump + poke reaction
+  const handleSingleClick = useCallback(() => {
+    if (stateRef.current === 'dragged' || stateRef.current === 'dancing') return;
+
+    // Increment poke count
+    pokeCountRef.current += 1;
+    try { localStorage.setItem(POKE_STORAGE_KEY, String(pokeCountRef.current)); } catch { /* noop */ }
+
+    const count = pokeCountRef.current;
+    if (count % 5 === 0) {
+      triggerSpeech(`Poked ${count} times.`);
+    } else {
+      triggerSpeech(POKE_REACTIONS[Math.floor(Math.random() * POKE_REACTIONS.length)]);
+    }
+
+    // Small jump
+    if (stateRef.current === 'walking' || stateRef.current === 'idle' || stateRef.current === 'phone' || stateRef.current === 'typing' || stateRef.current === 'thinking' || stateRef.current === 'waving') {
+      stateRef.current = 'jumping';
+      setCharacterState('jumping');
+      velocityYRef.current = -5;
+      velocityXRef.current = 0;
+    }
+  }, [triggerSpeech]);
+
+  // 2. DOUBLE-CLICK — dance
+  const handleDance = useCallback(() => {
+    if (stateRef.current === 'dragged') return;
+    stateRef.current = 'dancing';
+    setCharacterState('dancing');
+    triggerSpeech('*dances*');
+
+    setTimeout(() => {
+      if (stateRef.current === 'dancing') {
+        stateRef.current = 'walking';
+        setCharacterState('walking');
+      }
+    }, 4000);
+  }, [triggerSpeech]);
+
+  const handleClick = useCallback(() => {
+    if (wasDraggedRef.current) { wasDraggedRef.current = false; return; }
+    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+    clickTimeoutRef.current = setTimeout(handleSingleClick, 220);
+  }, [handleSingleClick]);
+
+  const handleDoubleClick = useCallback(() => {
+    if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+    handleDance();
+  }, [handleDance]);
+
+  // 3. DRAG — mousedown on character
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    wasDraggedRef.current = false;
+    dragOffsetRef.current = { x: e.clientX - posXRef.current, y: e.clientY - posYRef.current };
+    mouseHistoryRef.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+    stateRef.current = 'dragged';
+    setCharacterState('dragged');
+    e.preventDefault();
   }, []);
 
-  // Scroll + periodic teleport
+  // ── Mobile check ───────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // ── Load poke count ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    try { pokeCountRef.current = parseInt(localStorage.getItem(POKE_STORAGE_KEY) || '0', 10) || 0; } catch { /* noop */ }
+  }, []);
+
+  // ── Mouse move + mouse up (window-level for drag) ─────────────────────────
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      cursorXRef.current = e.clientX;
+      if (isDraggingRef.current) {
+        wasDraggedRef.current = true;
+        posXRef.current = e.clientX - dragOffsetRef.current.x;
+        posYRef.current = e.clientY - dragOffsetRef.current.y;
+        mouseHistoryRef.current.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+        if (mouseHistoryRef.current.length > 6) mouseHistoryRef.current.shift();
+      }
+    };
+
+    const onUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+
+      // Calculate toss velocity from mouse history
+      const hist = mouseHistoryRef.current;
+      if (hist.length >= 2) {
+        const first = hist[0];
+        const last = hist[hist.length - 1];
+        const dt = (last.t - first.t) / 1000;
+        if (dt > 0.01) {
+          velocityXRef.current = ((last.x - first.x) / dt) * 0.15;
+          velocityYRef.current = ((last.y - first.y) / dt) * 0.008;
+        }
+      }
+
+      stateRef.current = 'falling';
+      setCharacterState('falling');
+      mouseHistoryRef.current = [];
+    };
+
+    window.addEventListener('mousemove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // ── Konami code listener ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === KONAMI_CODE[konamiIndexRef.current]) {
+        konamiIndexRef.current += 1;
+        if (konamiIndexRef.current === KONAMI_CODE.length) {
+          konamiIndexRef.current = 0;
+          // Activate easter egg — dance party
+          stateRef.current = 'dancing';
+          setCharacterState('dancing');
+          triggerSpeech('CHEAT CODE ACTIVATED');
+          setTimeout(() => {
+            if (stateRef.current === 'dancing') {
+              stateRef.current = 'walking';
+              setCharacterState('walking');
+            }
+          }, 5000);
+        }
+      } else {
+        konamiIndexRef.current = e.key === KONAMI_CODE[0] ? 1 : 0;
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [triggerSpeech]);
+
+  // ── Scroll + periodic teleport ─────────────────────────────────────────────
+
   useEffect(() => {
     const handleScroll = () => {
       const newSection = updateActiveSection();
-      if (!isTeleportingRef.current && newSection !== activeSectionIdRef.current) {
+      if (!isTeleportingRef.current && !isDraggingRef.current && newSection !== activeSectionIdRef.current) {
         activeSectionIdRef.current = newSection;
         executePortalTeleport(newSection);
       }
@@ -207,11 +360,11 @@ export default function Avatar() {
     updateActiveSection();
     posXRef.current = platformBoundsRef.current.left + 50;
     posYRef.current = platformBoundsRef.current.y;
-    triggerSpeech("Welcome to Usman's Portfolio.");
+    triggerSpeech(getTimeGreeting());
 
-    // Periodic teleport every 25s
-    const portalInterval = setInterval(() => {
-      if (!isTeleportingRef.current && Math.random() < 0.5) {
+    // Periodic teleport
+    const interval = setInterval(() => {
+      if (!isTeleportingRef.current && !isDraggingRef.current && Math.random() < 0.5) {
         const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
         executePortalTeleport(sections[Math.floor(Math.random() * sections.length)]);
       }
@@ -220,12 +373,13 @@ export default function Avatar() {
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', updateActiveSection);
-      clearInterval(portalInterval);
+      clearInterval(interval);
       if (teleportTimerRef.current) clearTimeout(teleportTimerRef.current);
     };
   }, [updateActiveSection, executePortalTeleport, triggerSpeech]);
 
-  // 60fps game loop
+  // ── 60fps game loop ────────────────────────────────────────────────────────
+
   useEffect(() => {
     let lastTime = performance.now();
 
@@ -234,60 +388,86 @@ export default function Avatar() {
       lastTime = now;
 
       const container = containerRef.current;
-      const { left, right, y: targetGroundY } = platformBoundsRef.current;
+      const { left, right, y: groundY } = platformBoundsRef.current;
 
-      if (container && !isTeleportingRef.current) {
-        // Gravity
-        if (stateRef.current === 'falling') {
+      if (container && !isTeleportingRef.current && !isDraggingRef.current) {
+        const st = stateRef.current;
+
+        // ── Physics ──
+        if (st === 'falling') {
+          // Horizontal velocity + friction
+          posXRef.current += velocityXRef.current * delta;
+          velocityXRef.current *= 1 - 3 * delta;
+          if (Math.abs(velocityXRef.current) < 0.5) velocityXRef.current = 0;
+
+          // Vertical velocity + gravity
           posYRef.current += velocityYRef.current * delta * 120;
           velocityYRef.current += 15 * delta;
-          if (posYRef.current >= targetGroundY) {
-            posYRef.current = targetGroundY;
-            velocityYRef.current = 0;
-            stateRef.current = 'walking';
-            setCharacterState('walking');
-            isTeleportingRef.current = false;
+
+          // Wall bounce
+          if (posXRef.current < left) { posXRef.current = left; velocityXRef.current = Math.abs(velocityXRef.current) * 0.4; }
+          if (posXRef.current > right) { posXRef.current = right; velocityXRef.current = -Math.abs(velocityXRef.current) * 0.4; }
+
+          // Ground collision — bounce or land
+          if (posYRef.current >= groundY) {
+            posYRef.current = groundY;
+            if (Math.abs(velocityYRef.current) > 2.5) {
+              velocityYRef.current *= -0.35;
+            } else {
+              velocityYRef.current = 0;
+              velocityXRef.current = 0;
+              stateRef.current = 'walking';
+              setCharacterState('walking');
+              isTeleportingRef.current = false;
+            }
           }
-        } else if (stateRef.current === 'jumping') {
+        } else if (st === 'jumping') {
           posYRef.current += velocityYRef.current * delta * 60;
           velocityYRef.current += 12 * delta;
-        } else {
-          // Smooth anchor to platform
-          const yDiff = targetGroundY - posYRef.current;
-          if (Math.abs(yDiff) > 1) {
-            posYRef.current += yDiff * 0.1;
-          } else {
-            posYRef.current = targetGroundY;
+          if (velocityYRef.current > 0) {
+            stateRef.current = 'falling';
+            setCharacterState('falling');
           }
-        }
-
-        // Walk
-        if (stateRef.current === 'walking') {
+        } else if (st === 'dancing') {
+          walkPhaseRef.current += delta * 12;
+          const yDiff = groundY - posYRef.current;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
+          else posYRef.current = groundY;
+        } else if (st === 'waving' || st === 'typing' || st === 'thinking' || st === 'idle') {
+          walkPhaseRef.current += delta * 3;
+          const yDiff = groundY - posYRef.current;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
+          else posYRef.current = groundY;
+        } else if (st === 'phone') {
+          walkPhaseRef.current += delta * 2;
+          const yDiff = groundY - posYRef.current;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
+          else posYRef.current = groundY;
+        } else if (st === 'walking') {
           const walkSpeed = 55;
           walkPhaseRef.current += delta * 9;
 
+          // Smooth anchor to ground
+          const yDiff = groundY - posYRef.current;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
+          else posYRef.current = groundY;
+
+          // Horizontal movement
           if (dirRef.current === 'right') {
             posXRef.current += walkSpeed * delta;
-            if (posXRef.current >= right) {
-              posXRef.current = right;
-              dirRef.current = 'left';
-              setDirection('left');
-            }
+            if (posXRef.current >= right) { posXRef.current = right; dirRef.current = 'left'; setDirection('left'); }
           } else {
             posXRef.current -= walkSpeed * delta;
-            if (posXRef.current <= left) {
-              posXRef.current = left;
-              dirRef.current = 'right';
-              setDirection('right');
-            }
+            if (posXRef.current <= left) { posXRef.current = left; dirRef.current = 'right'; setDirection('right'); }
           }
 
-          // Occasional phone pause
+          // Section-specific idle pause
           if (Math.random() < 0.001) {
-            stateRef.current = 'phone';
-            setCharacterState('phone');
+            const idleState = getSectionIdleState(activeSectionIdRef.current);
+            stateRef.current = idleState;
+            setCharacterState(idleState);
             setTimeout(() => {
-              if (stateRef.current === 'phone') {
+              if (stateRef.current === idleState) {
                 stateRef.current = 'walking';
                 setCharacterState('walking');
               }
@@ -295,6 +475,18 @@ export default function Avatar() {
           }
         }
 
+        // Update DOM transform
+        container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
+        setWalkPhase(walkPhaseRef.current);
+
+        // Cursor offset for eye tracking
+        const rawOffset = (cursorXRef.current - posXRef.current - 20) / (window.innerWidth * 0.4);
+        setCursorOffset(Math.max(-1, Math.min(1, rawOffset)));
+      }
+
+      // Handle drag rendering
+      if (isDraggingRef.current && container) {
+        walkPhaseRef.current += delta * 2;
         container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
         setWalkPhase(walkPhaseRef.current);
       }
@@ -306,7 +498,8 @@ export default function Avatar() {
     return () => cancelAnimationFrame(animFrameRef.current);
   }, []);
 
-  // Don't render on mobile
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   if (isMobile) return null;
 
   return (
@@ -320,26 +513,18 @@ export default function Avatar() {
         }}
       >
         <div className="relative w-14 h-14 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-          {/* Outer ring */}
-          <div
-            className="absolute inset-0 border-[3px] border-black animate-spin"
-            style={{ animationDuration: '1.5s' }}
-          />
-          {/* Inner dot */}
+          <div className="absolute inset-0 border-[3px] border-black animate-spin" style={{ animationDuration: '1.5s' }} />
           <div className="w-3 h-3 bg-black" />
         </div>
       </div>
 
-      {/* Character container — fixed viewport positioning */}
+      {/* Character container */}
       <div
         ref={containerRef}
         className="fixed top-0 left-0 z-[100] pointer-events-none transition-opacity duration-300"
-        style={{
-          opacity: characterOpacity,
-          willChange: 'transform',
-        }}
+        style={{ opacity: characterOpacity, willChange: 'transform' }}
       >
-        {/* Speech Bubble — brutalist box */}
+        {/* Speech Bubble */}
         <div
           className={`absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 bg-white border-2 border-black text-[10px] text-black font-bold uppercase tracking-wider transition-all duration-300 ${
             showSpeech ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
@@ -352,12 +537,21 @@ export default function Avatar() {
         {/* Ground shadow */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/40 rounded-full blur-[2px]" />
 
-        {/* Character sprite */}
-        <AvatarCharacter
-          state={characterState}
-          direction={direction}
-          walkPhase={walkPhase}
-        />
+        {/* Interactive character wrapper */}
+        <div
+          className="relative cursor-grab active:cursor-grabbing"
+          style={{ pointerEvents: 'auto' }}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onMouseDown={handleMouseDown}
+        >
+          <AvatarCharacter
+            state={characterState}
+            direction={direction}
+            walkPhase={walkPhase}
+            cursorOffsetX={cursorOffset}
+          />
+        </div>
       </div>
     </>
   );
