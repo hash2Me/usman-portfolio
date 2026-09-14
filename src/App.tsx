@@ -8,7 +8,6 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import AnimatedBackground from './components/AnimatedBackground';
 import Avatar from './components/Avatar';
-import SectionDivider from './components/SectionDivider';
 
 export default function App() {
   return (
@@ -31,15 +30,10 @@ export default function App() {
 
       <main id="main-content" className="relative z-10">
         <Hero />
-        <SectionDivider />
         <Projects />
-        <SectionDivider />
         <Experience />
-        <SectionDivider />
         <Skills />
-        <SectionDivider />
         <Education />
-        <SectionDivider />
         <Contact />
       </main>
 
