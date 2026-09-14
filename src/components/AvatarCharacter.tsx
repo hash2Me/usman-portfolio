@@ -1,6 +1,6 @@
 /**
- * CSS-drawn pixel-art businessman character.
- * High contrast, responsive scaling, bright white shirt, tie, and drop shadow for maximum visibility.
+ * CSS-drawn monochrome character — matches the brutalist B&W portfolio theme.
+ * All colors are strictly black / white / grays — no color accents.
  */
 
 type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'sitting';
@@ -9,7 +9,7 @@ type Direction = 'left' | 'right';
 interface Props {
   state: CharacterState;
   direction: Direction;
-  walkPhase: number; // 0 to 2π continuous cycle
+  walkPhase: number;
 }
 
 export default function AvatarCharacter({ state, direction, walkPhase }: Props) {
@@ -18,35 +18,29 @@ export default function AvatarCharacter({ state, direction, walkPhase }: Props) 
   const isFalling = state === 'falling';
   const isPhone = state === 'phone';
 
-  // Walk cycle leg angles (swing from -28° to 28°)
-  const leftLegAngle = isWalking ? Math.sin(walkPhase) * 28 : 0;
-  const rightLegAngle = isWalking ? Math.sin(walkPhase + Math.PI) * 28 : 0;
-
-  // Arm swing (opposite to legs)
-  const leftArmAngle = isWalking ? Math.sin(walkPhase + Math.PI) * 22 : (isPhone ? 70 : 5);
-  const rightArmAngle = isWalking ? Math.sin(walkPhase) * 22 : (isPhone ? 60 : -5);
-
-  // Body bob
-  const bodyBob = isWalking ? Math.abs(Math.sin(walkPhase * 2)) * 3 : 0;
+  // Walk cycle
+  const leftLegAngle = isWalking ? Math.sin(walkPhase) * 26 : 0;
+  const rightLegAngle = isWalking ? Math.sin(walkPhase + Math.PI) * 26 : 0;
+  const leftArmAngle = isWalking ? Math.sin(walkPhase + Math.PI) * 20 : (isPhone ? 70 : 4);
+  const rightArmAngle = isWalking ? Math.sin(walkPhase) * 20 : (isPhone ? 60 : -4);
+  const bodyBob = isWalking ? Math.abs(Math.sin(walkPhase * 2)) * 2.5 : 0;
+  const bodyLean = isWalking ? Math.sin(walkPhase) * 2.5 : 0;
 
   // Jump/fall squash-stretch
-  const scaleX = isJumping ? 0.85 : isFalling ? 1.15 : 1;
-  const scaleY = isJumping ? 1.2 : isFalling ? 0.85 : 1;
-
-  // Body lean while walking
-  const bodyLean = isWalking ? Math.sin(walkPhase) * 3 : 0;
+  const scaleX = isJumping ? 0.88 : isFalling ? 1.12 : 1;
+  const scaleY = isJumping ? 1.15 : isFalling ? 0.88 : 1;
 
   return (
     <div
-      className="relative drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]"
       style={{
-        width: 42,
-        height: 70,
+        width: 40,
+        height: 68,
         transform: `scaleX(${direction === 'left' ? -scaleX : scaleX}) scaleY(${scaleY})`,
         transition: 'transform 0.15s ease',
+        position: 'relative',
       }}
     >
-      {/* Body container with bob and lean */}
+      {/* Body container with bob & lean */}
       <div
         style={{
           position: 'absolute',
@@ -57,150 +51,148 @@ export default function AvatarCharacter({ state, direction, walkPhase }: Props) 
       >
         {/* HEAD */}
         <div
-          className="absolute rounded-full border border-black/20"
           style={{
-            width: 18,
-            height: 18,
+            width: 16,
+            height: 16,
+            position: 'absolute',
             top: 0,
             left: 12,
-            background: '#ffcc99', // bright skin tone
-            boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.2)',
+            background: '#e5e5e5',
+            borderRadius: '50%',
+            border: '2px solid #000',
           }}
         >
-          {/* Hair */}
+          {/* Hair — flat cap style */}
           <div
-            className="absolute rounded-t-full"
             style={{
               width: 18,
-              height: 9,
-              top: 0,
-              left: 0,
-              background: '#0f172a',
+              height: 8,
+              position: 'absolute',
+              top: -2,
+              left: -2,
+              background: '#000',
               borderRadius: '9px 9px 0 0',
             }}
           />
           {/* Eye */}
           <div
-            className="absolute rounded-full"
             style={{
               width: 3,
               height: 3,
+              position: 'absolute',
               top: 9,
-              right: 4,
-              background: '#0f172a',
+              right: 3,
+              background: '#000',
+              borderRadius: '50%',
             }}
           />
         </div>
 
-        {/* TORSO (crisp white shirt) */}
+        {/* TORSO */}
         <div
-          className="absolute border border-black/10"
           style={{
-            width: 20,
-            height: 24,
-            top: 17,
+            width: 18,
+            height: 22,
+            position: 'absolute',
+            top: 16,
             left: 11,
-            background: '#ffffff',
-            borderRadius: '4px 4px 2px 2px',
-            boxShadow: '0 2px 8px rgba(255,255,255,0.2), inset -3px 0 0 rgba(0,0,0,0.1)',
+            background: '#fff',
+            border: '2px solid #000',
+            borderRadius: '3px 3px 1px 1px',
           }}
         >
-          {/* Tie */}
+          {/* Tie — black */}
           <div
-            className="absolute"
             style={{
-              width: 5,
-              height: 18,
+              width: 4,
+              height: 16,
+              position: 'absolute',
               top: 1,
-              left: 7.5,
-              background: '#3b82f6', // vibrant blue tie
-              clipPath: 'polygon(30% 0%, 70% 0%, 90% 100%, 10% 100%)',
+              left: 6,
+              background: '#000',
+              clipPath: 'polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%)',
             }}
           />
-          {/* Collar left */}
-          <div className="absolute" style={{ width: 6, height: 5, top: 0, left: 1, background: '#e2e8f0', clipPath: 'polygon(0 0, 100% 0, 100% 100%)' }} />
-          {/* Collar right */}
-          <div className="absolute" style={{ width: 6, height: 5, top: 0, right: 1, background: '#e2e8f0', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }} />
         </div>
 
         {/* LEFT ARM */}
         <div
-          className="absolute"
           style={{
             width: 6,
-            height: 20,
-            top: 18,
+            height: 19,
+            position: 'absolute',
+            top: 17,
             left: 5,
             transformOrigin: 'top center',
             transform: `rotate(${leftArmAngle}deg)`,
           }}
         >
-          {/* Upper arm (shirt sleeve) */}
-          <div style={{ width: 6, height: 10, background: '#ffffff', borderRadius: 2, border: '1px solid rgba(0,0,0,0.05)' }} />
+          {/* Sleeve */}
+          <div style={{ width: 6, height: 10, background: '#fff', border: '1.5px solid #000', borderRadius: 2 }} />
           {/* Hand */}
-          <div className="rounded-full" style={{ width: 5, height: 5, marginTop: 0, marginLeft: 0.5, background: '#ffcc99' }} />
-          {/* Coffee cup */}
+          <div style={{ width: 5, height: 5, marginLeft: 0.5, background: '#e5e5e5', border: '1px solid #000', borderRadius: '50%' }} />
+          {/* Coffee mug — monochrome */}
           {(state === 'walking' || state === 'idle') && (
-            <div style={{ width: 7, height: 8, marginTop: -2, marginLeft: -1, background: '#d97706', borderRadius: '0 0 3px 3px', border: '1px solid #b45309' }}>
-              <div className="absolute -top-3 left-1 text-[8px] text-white font-bold opacity-80 animate-pulse">~</div>
+            <div style={{ width: 7, height: 7, marginTop: -1, marginLeft: -1, background: '#fff', border: '2px solid #000', borderRadius: '0 0 3px 3px' }}>
+              <div style={{ position: 'absolute', top: -6, left: 2, fontSize: 7, color: '#000', fontWeight: 'bold', opacity: 0.5 }}>~</div>
             </div>
           )}
-          {/* Phone */}
+          {/* Phone — monochrome */}
           {isPhone && (
-            <div style={{ width: 6, height: 10, marginTop: -2, background: '#0f172a', borderRadius: 2, border: '1px solid #38bdf8' }}>
-              <div style={{ width: 4, height: 6, margin: '1px auto 0', background: '#38bdf8', borderRadius: 1 }} />
+            <div style={{ width: 6, height: 10, marginTop: -1, background: '#000', borderRadius: 2, border: '1px solid #555' }}>
+              <div style={{ width: 4, height: 6, margin: '1px auto 0', background: '#ccc', borderRadius: 1 }} />
             </div>
           )}
         </div>
 
         {/* RIGHT ARM */}
         <div
-          className="absolute"
           style={{
             width: 6,
-            height: 18,
-            top: 18,
+            height: 17,
+            position: 'absolute',
+            top: 17,
             right: 5,
             transformOrigin: 'top center',
             transform: `rotate(${rightArmAngle}deg)`,
           }}
         >
-          <div style={{ width: 6, height: 10, background: '#ffffff', borderRadius: 2, border: '1px solid rgba(0,0,0,0.05)' }} />
-          <div className="rounded-full" style={{ width: 5, height: 5, marginTop: 0, marginLeft: 0.5, background: '#ffcc99' }} />
+          <div style={{ width: 6, height: 10, background: '#fff', border: '1.5px solid #000', borderRadius: 2 }} />
+          <div style={{ width: 5, height: 5, marginLeft: 0.5, background: '#e5e5e5', border: '1px solid #000', borderRadius: '50%' }} />
         </div>
 
         {/* LEFT LEG */}
         <div
-          className="absolute"
           style={{
             width: 7,
-            height: 26,
-            top: 40,
+            height: 24,
+            position: 'absolute',
+            top: 37,
             left: 12,
             transformOrigin: 'top center',
             transform: `rotate(${leftLegAngle}deg)`,
           }}
         >
           {/* Pants */}
-          <div style={{ width: 7, height: 19, background: '#1e293b', borderRadius: 2 }} />
+          <div style={{ width: 7, height: 17, background: '#000', borderRadius: 2 }} />
           {/* Shoe */}
-          <div style={{ width: 10, height: 5, marginLeft: -1, background: '#020617', borderRadius: '2px 5px 2px 2px' }} />
+          <div style={{ width: 10, height: 5, marginLeft: -1, background: '#000', borderRadius: '2px 5px 2px 2px', border: '1px solid #333' }} />
         </div>
 
         {/* RIGHT LEG */}
         <div
-          className="absolute"
           style={{
             width: 7,
-            height: 26,
-            top: 40,
-            left: 23,
+            height: 24,
+            position: 'absolute',
+            top: 37,
+            left: 22,
             transformOrigin: 'top center',
             transform: `rotate(${rightLegAngle}deg)`,
           }}
         >
-          <div style={{ width: 7, height: 19, background: '#1e293b', borderRadius: 2 }} />
-          <div style={{ width: 10, height: 5, marginLeft: -1, background: '#020617', borderRadius: '2px 5px 2px 2px' }} />
+          <div style={{ width: 7, height: 17, background: '#000', borderRadius: 2 }} />
+          <div style={{ width: 10, height: 5, marginLeft: -1, background: '#000', borderRadius: '2px 5px 2px 2px', border: '1px solid #333' }} />
         </div>
       </div>
     </div>

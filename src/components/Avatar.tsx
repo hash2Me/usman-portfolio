@@ -3,97 +3,98 @@ import AvatarCharacter from './AvatarCharacter';
 
 type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'sitting';
 type Direction = 'left' | 'right';
-type PortalExitType = 'walk' | 'fall';
-type PortalEnterType = 'walk' | 'jump';
 
 const SECTION_SPEECH: Record<string, string[]> = {
   hero: [
-    "Welcome to Usman's Portfolio! ☕",
-    "Scroll down or let me teleport you around!",
-    "Everything here was engineered from scratch 🚀",
-    "I'm keeping an eye on the codebase!",
+    "Welcome to Usman's Portfolio.",
+    "Scroll down to explore.",
+    "Engineered from scratch.",
   ],
   projects: [
-    "Inspecting project architecture... 💻",
-    "Data structures + React = pure magic.",
-    "Check out the technical depth on these cards ↑",
-    "Robust engineering in action!",
+    "Inspecting project architecture...",
+    "Check out the technical depth.",
+    "Robust engineering in action.",
   ],
   experience: [
-    "Reviewing work history & impact 📈",
-    "Delivering production code every day.",
-    "Strong technical execution!",
+    "Reviewing work history.",
+    "Production code, daily.",
   ],
   skills: [
-    "Skill matrix loaded & verified 🛠️",
-    "C++ algorithms + Modern React.",
-    "Always leveling up the tech stack!",
+    "Skill matrix loaded.",
+    "C++ algorithms + React.",
   ],
   education: [
-    "Computer Science & Systems 🎓",
-    "Core CS fundamentals are key.",
+    "Computer Science fundamentals.",
     "Theory applied to real-world software.",
   ],
   contact: [
-    "Ready to build something awesome? 🤝",
-    "Drop an email or phone call!",
-    "Available for frontend & full-stack roles.",
+    "Ready to build something?",
+    "Let's connect.",
   ],
 };
 
 export default function Avatar() {
-  // Movement & physics state in refs for 60fps performance
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
 
-  // Viewport-relative coordinates (fixed positioning)
+  // Physics refs — mutated in rAF, never cause re-renders
   const posXRef = useRef<number>(120);
-  const posYRef = useRef<number>(200); // Fixed Y relative to viewport
+  const posYRef = useRef<number>(200);
   const velocityYRef = useRef<number>(0);
   const dirRef = useRef<Direction>('right');
   const stateRef = useRef<CharacterState>('walking');
   const walkPhaseRef = useRef<number>(0);
-  
-  // Section platform tracking (viewport-relative bounds)
+
+  // Platform tracking
   const activeSectionIdRef = useRef<string>('hero');
   const platformBoundsRef = useRef<{ left: number; right: number; y: number }>({ left: 40, right: 600, y: 250 });
 
-  // Portal transition states
-  const isTeleportingRef = useRef<boolean>(false);
-  const portalPosRef = useRef<{ x: number; y: number }>({ x: 120, y: 200 });
+  // Cursor lean — subtle head-tilt toward mouse
+  const cursorXRef = useRef<number>(0);
 
-  // React state for rendering UI overlay
+  // Portal
+  const isTeleportingRef = useRef<boolean>(false);
+  const teleportTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // React state for rendering
   const [characterState, setCharacterState] = useState<CharacterState>('walking');
   const [direction, setDirection] = useState<Direction>('right');
   const [walkPhase, setWalkPhase] = useState<number>(0);
   const [speech, setSpeech] = useState<string>('');
   const [showSpeech, setShowSpeech] = useState<boolean>(false);
-  const [portalCoords, setPortalCoords] = useState<{ x: number; y: number }>({ x: 120, y: 200 });
-  const [portalScale, setPortalScale] = useState<number>(0);
   const [characterOpacity, setCharacterOpacity] = useState<number>(1);
+  const [portalCoords, setPortalCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [portalVisible, setPortalVisible] = useState<boolean>(false);
 
   const speechTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
-  const teleportTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Speech bubble helper
+  // Hide on mobile (<640px)
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Speech bubble
   const triggerSpeech = useCallback((text: string) => {
     setSpeech(text);
     setShowSpeech(true);
     if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
-    speechTimeoutRef.current = setTimeout(() => setShowSpeech(false), 4000);
+    speechTimeoutRef.current = setTimeout(() => setShowSpeech(false), 3500);
   }, []);
 
   const triggerSectionSpeech = useCallback((sectionId: string) => {
     const lines = SECTION_SPEECH[sectionId] || SECTION_SPEECH.hero;
-    const line = lines[Math.floor(Math.random() * lines.length)];
-    triggerSpeech(line);
+    triggerSpeech(lines[Math.floor(Math.random() * lines.length)]);
   }, [triggerSpeech]);
 
-  // Calculate viewport-relative platform bounds for currently visible section
+  // Platform bounds from viewport
   const updateActiveSection = useCallback(() => {
     const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
     const viewportMiddle = window.innerHeight * 0.45;
-    
+
     let currentId = 'hero';
     let currentEl: HTMLElement | null = null;
 
@@ -117,15 +118,10 @@ export default function Avatar() {
       const rect = currentEl.getBoundingClientRect();
       const contentContainer = currentEl.querySelector('.section') || currentEl;
       const cRect = contentContainer.getBoundingClientRect();
-      
+
       const left = Math.max(30, cRect.left + 20);
       const right = Math.min(window.innerWidth - 70, cRect.right - 70);
-      
-      // Calculate Y in viewport terms so character is ALWAYS visible on screen!
-      const targetScreenY = Math.min(
-        window.innerHeight - 100,
-        Math.max(120, rect.bottom - 60)
-      );
+      const targetScreenY = Math.min(window.innerHeight - 100, Math.max(120, rect.bottom - 60));
 
       platformBoundsRef.current = { left, right, y: targetScreenY };
     }
@@ -133,124 +129,93 @@ export default function Avatar() {
     return currentId;
   }, []);
 
-  // Teleport Avatar between sections via Portal
-  const executePortalTeleport = useCallback((targetSectionId: string, enterMode: PortalEnterType = 'walk', exitMode: PortalExitType = 'fall') => {
+  // Teleport — clean monochrome portal
+  const executePortalTeleport = useCallback((targetSectionId: string) => {
     if (isTeleportingRef.current) return;
     isTeleportingRef.current = true;
 
+    // Show entrance portal
     const startX = posXRef.current;
     const startY = posYRef.current;
+    setPortalCoords({ x: startX + (dirRef.current === 'right' ? 30 : -30), y: startY });
+    setPortalVisible(true);
+    triggerSpeech('Teleporting...');
 
-    // 1. Open entrance portal near character
-    portalPosRef.current = { x: startX + (dirRef.current === 'right' ? 40 : -40), y: startY - 10 };
-    setPortalCoords(portalPosRef.current);
-    setPortalScale(1);
-
-    if (enterMode === 'jump') {
-      stateRef.current = 'jumping';
-      setCharacterState('jumping');
-      velocityYRef.current = -7;
-      triggerSpeech("Jumping into the portal! 🌀");
-    } else {
-      triggerSpeech("Entering portal... 🌀");
-    }
-
-    // 2. Character enters portal (disappears)
+    // Character disappears
     teleportTimerRef.current = setTimeout(() => {
       setCharacterOpacity(0);
-      setPortalScale(0);
 
-      // 3. Move to new section
       setTimeout(() => {
+        setPortalVisible(false);
+
+        // Scroll to new section
         activeSectionIdRef.current = targetSectionId;
         const targetEl = document.getElementById(targetSectionId);
-        if (targetEl) {
-          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-        updateActiveSection();
-        const { left, right, y } = platformBoundsRef.current;
-        const newX = left + (right - left) * 0.3;
-        
-        posXRef.current = newX;
-        setDirection('right');
-        dirRef.current = 'right';
+        setTimeout(() => {
+          updateActiveSection();
+          const { left, right, y } = platformBoundsRef.current;
+          const newX = left + (right - left) * 0.3;
 
-        if (exitMode === 'fall') {
-          // Portal opens high above, character falls down
-          const highY = Math.max(60, y - 160);
-          posYRef.current = highY;
-          portalPosRef.current = { x: newX, y: highY + 20 };
-          setPortalCoords(portalPosRef.current);
-          setPortalScale(1);
+          // Exit portal at destination
+          setPortalCoords({ x: newX, y: Math.max(60, y - 120) });
+          setPortalVisible(true);
+
+          posXRef.current = newX;
+          posYRef.current = Math.max(60, y - 120);
+          dirRef.current = 'right';
+          setDirection('right');
 
           setTimeout(() => {
             setCharacterOpacity(1);
             stateRef.current = 'falling';
             setCharacterState('falling');
-            velocityYRef.current = 2; // fall speed
+            velocityYRef.current = 2;
 
             setTimeout(() => {
-              setPortalScale(0);
+              setPortalVisible(false);
               triggerSectionSpeech(targetSectionId);
-            }, 300);
-          }, 300);
-
-        } else {
-          // Walk out of portal
-          posYRef.current = y;
-          portalPosRef.current = { x: newX - 30, y: y - 10 };
-          setPortalCoords(portalPosRef.current);
-          setPortalScale(1);
-
-          setTimeout(() => {
-            setCharacterOpacity(1);
-            stateRef.current = 'walking';
-            setCharacterState('walking');
-
-            setTimeout(() => {
-              setPortalScale(0);
-              isTeleportingRef.current = false;
-              triggerSectionSpeech(targetSectionId);
-            }, 400);
-          }, 300);
-        }
-      }, 600);
-    }, 600);
+            }, 350);
+          }, 250);
+        }, 500);
+      }, 400);
+    }, 500);
   }, [triggerSpeech, triggerSectionSpeech, updateActiveSection]);
 
-  // Handle scroll detection and random portal travel
+  // Cursor tracking
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => { cursorXRef.current = e.clientX; };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, []);
+
+  // Scroll + periodic teleport
   useEffect(() => {
     const handleScroll = () => {
       const newSection = updateActiveSection();
-      
       if (!isTeleportingRef.current && newSection !== activeSectionIdRef.current) {
         activeSectionIdRef.current = newSection;
-        const enterMode: PortalEnterType = Math.random() > 0.5 ? 'jump' : 'walk';
-        const exitMode: PortalExitType = Math.random() > 0.5 ? 'fall' : 'walk';
-        executePortalTeleport(newSection, enterMode, exitMode);
+        executePortalTeleport(newSection);
       }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', updateActiveSection);
-    
-    // Initial placement setup
+
+    // Initial placement
     updateActiveSection();
     posXRef.current = platformBoundsRef.current.left + 50;
     posYRef.current = platformBoundsRef.current.y;
-    triggerSpeech("Welcome to Usman's Portfolio! ☕");
+    triggerSpeech("Welcome to Usman's Portfolio.");
 
-    // Occasional portal teleport every 22 seconds if idle
+    // Periodic teleport every 25s
     const portalInterval = setInterval(() => {
-      if (!isTeleportingRef.current && Math.random() < 0.6) {
+      if (!isTeleportingRef.current && Math.random() < 0.5) {
         const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
-        const nextSec = sections[Math.floor(Math.random() * sections.length)];
-        const enterMode: PortalEnterType = Math.random() > 0.5 ? 'jump' : 'walk';
-        const exitMode: PortalExitType = Math.random() > 0.5 ? 'fall' : 'walk';
-        executePortalTeleport(nextSec, enterMode, exitMode);
+        executePortalTeleport(sections[Math.floor(Math.random() * sections.length)]);
       }
-    }, 22000);
+    }, 25000);
 
     return () => {
       window.removeEventListener('scroll', handleScroll);
@@ -260,7 +225,7 @@ export default function Avatar() {
     };
   }, [updateActiveSection, executePortalTeleport, triggerSpeech]);
 
-  // Main 60fps Game Animation Loop
+  // 60fps game loop
   useEffect(() => {
     let lastTime = performance.now();
 
@@ -272,11 +237,10 @@ export default function Avatar() {
       const { left, right, y: targetGroundY } = platformBoundsRef.current;
 
       if (container && !isTeleportingRef.current) {
-        // 1. Gravity & Fall physics
+        // Gravity
         if (stateRef.current === 'falling') {
           posYRef.current += velocityYRef.current * delta * 120;
-          velocityYRef.current += 15 * delta; // gravity
-
+          velocityYRef.current += 15 * delta;
           if (posYRef.current >= targetGroundY) {
             posYRef.current = targetGroundY;
             velocityYRef.current = 0;
@@ -288,20 +252,20 @@ export default function Avatar() {
           posYRef.current += velocityYRef.current * delta * 60;
           velocityYRef.current += 12 * delta;
         } else {
-          // Keep character anchored smoothly to platform Y
+          // Smooth anchor to platform
           const yDiff = targetGroundY - posYRef.current;
           if (Math.abs(yDiff) > 1) {
-            posYRef.current += yDiff * 0.12;
+            posYRef.current += yDiff * 0.1;
           } else {
             posYRef.current = targetGroundY;
           }
         }
 
-        // 2. Horizontal walking on block platform bounds
+        // Walk
         if (stateRef.current === 'walking') {
-          const walkSpeed = 70; // px per sec
-          walkPhaseRef.current += delta * 10;
-          
+          const walkSpeed = 55;
+          walkPhaseRef.current += delta * 9;
+
           if (dirRef.current === 'right') {
             posXRef.current += walkSpeed * delta;
             if (posXRef.current >= right) {
@@ -318,8 +282,8 @@ export default function Avatar() {
             }
           }
 
-          // Random phone/idle pause while walking on platform
-          if (Math.random() < 0.0015) {
+          // Occasional phone pause
+          if (Math.random() < 0.001) {
             stateRef.current = 'phone';
             setCharacterState('phone');
             setTimeout(() => {
@@ -327,11 +291,10 @@ export default function Avatar() {
                 stateRef.current = 'walking';
                 setCharacterState('walking');
               }
-            }, 3500);
+            }, 4000);
           }
         }
 
-        // Update DOM transform directly using FIXED viewport coordinates
         container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
         setWalkPhase(walkPhaseRef.current);
       }
@@ -340,55 +303,56 @@ export default function Avatar() {
     };
 
     animFrameRef.current = requestAnimationFrame(gameLoop);
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-    };
+    return () => cancelAnimationFrame(animFrameRef.current);
   }, []);
+
+  // Don't render on mobile
+  if (isMobile) return null;
 
   return (
     <>
-      {/* Video Game Swirling Portal Component */}
+      {/* Portal — monochrome spinning square */}
       <div
-        className="fixed top-0 left-0 z-[100] pointer-events-none transition-all duration-500 ease-out"
+        className="fixed top-0 left-0 z-[100] pointer-events-none transition-all duration-400 ease-out"
         style={{
-          transform: `translate3d(${portalCoords.x}px, ${portalCoords.y}px, 0) scale(${portalScale})`,
-          opacity: portalScale > 0 ? 1 : 0,
+          transform: `translate3d(${portalCoords.x}px, ${portalCoords.y}px, 0)`,
+          opacity: portalVisible ? 1 : 0,
         }}
       >
-        <div className="relative w-16 h-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-          {/* Outer glowing vortex ring */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 via-cyan-400 to-white animate-spin blur-sm opacity-90" />
-          {/* Inner swirling portal core */}
-          <div className="absolute w-12 h-16 rounded-full bg-slate-950 border-2 border-white shadow-[0_0_25px_rgba(255,255,255,0.9)] flex items-center justify-center overflow-hidden">
-            <div className="w-full h-full bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-white via-cyan-400 to-purple-900 animate-pulse" />
-          </div>
+        <div className="relative w-14 h-14 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+          {/* Outer ring */}
+          <div
+            className="absolute inset-0 border-[3px] border-black animate-spin"
+            style={{ animationDuration: '1.5s' }}
+          />
+          {/* Inner dot */}
+          <div className="w-3 h-3 bg-black" />
         </div>
       </div>
 
-      {/* Character Game Entity Container - FIXED positioning for 100% viewport visibility */}
+      {/* Character container — fixed viewport positioning */}
       <div
         ref={containerRef}
-        className="fixed top-0 left-0 z-[100] pointer-events-none transition-opacity duration-300 block"
+        className="fixed top-0 left-0 z-[100] pointer-events-none transition-opacity duration-300"
         style={{
           opacity: characterOpacity,
           willChange: 'transform',
         }}
       >
-        {/* Speech Bubble */}
+        {/* Speech Bubble — brutalist box */}
         <div
-          className={`absolute -top-16 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 bg-white border-2 border-black text-xs text-black font-bold uppercase tracking-wider shadow-hard-sm transition-all duration-300 ${
-            showSpeech ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90'
+          className={`absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 bg-white border-2 border-black text-[10px] text-black font-bold uppercase tracking-wider transition-all duration-300 ${
+            showSpeech ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
           }`}
         >
           {speech}
-          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white border-r-2 border-b-2 border-black" />
+          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white border-r-2 border-b-2 border-black" />
         </div>
 
-        {/* Character Ground Shadow */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-2.5 bg-black/60 rounded-full blur-xs" />
+        {/* Ground shadow */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/40 rounded-full blur-[2px]" />
 
-        {/* CSS Character Sprite */}
+        {/* Character sprite */}
         <AvatarCharacter
           state={characterState}
           direction={direction}
