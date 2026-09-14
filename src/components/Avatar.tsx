@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import AvatarCharacter from './AvatarCharacter';
 
-type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'waving' | 'dancing' | 'typing' | 'thinking' | 'dragged';
+type CharacterState = 'idle' | 'walking' | 'jumping' | 'falling' | 'phone' | 'waving' | 'dancing' | 'typing' | 'thinking' | 'dragged' | 'listening' | 'talking' | 'sitting';
 type Direction = 'left' | 'right';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -46,13 +46,21 @@ function getSectionIdleState(sectionId: string): CharacterState {
   }
 }
 
+function getChatbotPerch() {
+  const chatWidth = window.innerWidth >= 640 ? 380 : 320;
+  const chatRight = window.innerWidth - 24;
+  const chatLeft = chatRight - chatWidth;
+  const chatTop = window.innerHeight - 24 - 56 - 16 - 450;
+  return { x: chatLeft + 15, y: chatTop - 40 };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function Avatar() {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
 
-  // Physics refs — mutated at 60fps, never cause re-renders
+  // Physics refs
   const posXRef = useRef(120);
   const posYRef = useRef(200);
   const velocityXRef = useRef(0);
@@ -81,13 +89,17 @@ export default function Avatar() {
   // Konami
   const konamiIndexRef = useRef(0);
 
-  // Poke count
+  // Poke
   const pokeCountRef = useRef(0);
-
-  // Click vs double-click disambiguation
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // React state (rendering only)
+  // ── Chatbot integration refs ───────────────────────────────────────────────
+  const chatbotPhaseRef = useRef<'approaching' | 'hopping-in' | 'active' | 'hopping-out' | null>(null);
+  const chatbotAnimRef = useRef<'idle' | 'listening' | 'thinking' | 'talking'>('idle');
+  const chatbotAnchorRef = useRef({ x: 0, y: 0 });
+  const hopStartRef = useRef({ x: 0, y: 0, time: 0 });
+
+  // React state
   const [characterState, setCharacterState] = useState<CharacterState>('walking');
   const [direction, setDirection] = useState<Direction>('right');
   const [walkPhase, setWalkPhase] = useState(0);
@@ -98,6 +110,7 @@ export default function Avatar() {
   const [portalCoords, setPortalCoords] = useState({ x: 0, y: 0 });
   const [portalVisible, setPortalVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [inChatbotMode, setInChatbotMode] = useState(false);
 
   const speechTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -127,11 +140,7 @@ export default function Avatar() {
       const el = document.getElementById(id) || (id === 'hero' ? document.getElementById('main-content') : null);
       if (el) {
         const rect = el.getBoundingClientRect();
-        if (rect.top <= viewportMiddle && rect.bottom >= 100) {
-          currentId = id;
-          currentEl = el;
-          break;
-        }
+        if (rect.top <= viewportMiddle && rect.bottom >= 100) { currentId = id; currentEl = el; break; }
       }
     }
     if (!currentEl) currentEl = document.getElementById('hero') || document.body;
@@ -150,7 +159,7 @@ export default function Avatar() {
   // ── Teleport ───────────────────────────────────────────────────────────────
 
   const executePortalTeleport = useCallback((targetSectionId: string) => {
-    if (isTeleportingRef.current || isDraggingRef.current) return;
+    if (isTeleportingRef.current || isDraggingRef.current || chatbotPhaseRef.current) return;
     isTeleportingRef.current = true;
 
     setPortalCoords({ x: posXRef.current + (dirRef.current === 'right' ? 30 : -30), y: posYRef.current });
@@ -169,7 +178,6 @@ export default function Avatar() {
           updateActiveSection();
           const { left, right, y } = platformBoundsRef.current;
           const newX = left + (right - left) * 0.3;
-
           setPortalCoords({ x: newX, y: Math.max(60, y - 120) });
           setPortalVisible(true);
           posXRef.current = newX;
@@ -183,10 +191,7 @@ export default function Avatar() {
             setCharacterState('falling');
             velocityYRef.current = 2;
             velocityXRef.current = 0;
-            setTimeout(() => {
-              setPortalVisible(false);
-              triggerSectionSpeech(targetSectionId);
-            }, 350);
+            setTimeout(() => { setPortalVisible(false); triggerSectionSpeech(targetSectionId); }, 350);
           }, 250);
         }, 500);
       }, 400);
@@ -195,23 +200,13 @@ export default function Avatar() {
 
   // ── Interaction handlers ───────────────────────────────────────────────────
 
-  // 1. CLICK — jump + poke reaction
   const handleSingleClick = useCallback(() => {
-    if (stateRef.current === 'dragged' || stateRef.current === 'dancing') return;
-
-    // Increment poke count
+    if (stateRef.current === 'dragged' || stateRef.current === 'dancing' || chatbotPhaseRef.current) return;
     pokeCountRef.current += 1;
     try { localStorage.setItem(POKE_STORAGE_KEY, String(pokeCountRef.current)); } catch { /* noop */ }
-
     const count = pokeCountRef.current;
-    if (count % 5 === 0) {
-      triggerSpeech(`Poked ${count} times.`);
-    } else {
-      triggerSpeech(POKE_REACTIONS[Math.floor(Math.random() * POKE_REACTIONS.length)]);
-    }
-
-    // Small jump
-    if (stateRef.current === 'walking' || stateRef.current === 'idle' || stateRef.current === 'phone' || stateRef.current === 'typing' || stateRef.current === 'thinking' || stateRef.current === 'waving') {
+    triggerSpeech(count % 5 === 0 ? `Poked ${count} times.` : POKE_REACTIONS[Math.floor(Math.random() * POKE_REACTIONS.length)]);
+    if (['walking', 'idle', 'phone', 'typing', 'thinking', 'waving'].includes(stateRef.current)) {
       stateRef.current = 'jumping';
       setCharacterState('jumping');
       velocityYRef.current = -5;
@@ -219,19 +214,12 @@ export default function Avatar() {
     }
   }, [triggerSpeech]);
 
-  // 2. DOUBLE-CLICK — dance
   const handleDance = useCallback(() => {
-    if (stateRef.current === 'dragged') return;
+    if (stateRef.current === 'dragged' || chatbotPhaseRef.current) return;
     stateRef.current = 'dancing';
     setCharacterState('dancing');
     triggerSpeech('*dances*');
-
-    setTimeout(() => {
-      if (stateRef.current === 'dancing') {
-        stateRef.current = 'walking';
-        setCharacterState('walking');
-      }
-    }, 4000);
+    setTimeout(() => { if (stateRef.current === 'dancing') { stateRef.current = 'walking'; setCharacterState('walking'); } }, 4000);
   }, [triggerSpeech]);
 
   const handleClick = useCallback(() => {
@@ -245,8 +233,8 @@ export default function Avatar() {
     handleDance();
   }, [handleDance]);
 
-  // 3. DRAG — mousedown on character
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (chatbotPhaseRef.current) return; // no dragging during chatbot mode
     isDraggingRef.current = true;
     wasDraggedRef.current = false;
     dragOffsetRef.current = { x: e.clientX - posXRef.current, y: e.clientY - posYRef.current };
@@ -265,13 +253,13 @@ export default function Avatar() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // ── Load poke count ────────────────────────────────────────────────────────
+  // ── Poke count ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
     try { pokeCountRef.current = parseInt(localStorage.getItem(POKE_STORAGE_KEY) || '0', 10) || 0; } catch { /* noop */ }
   }, []);
 
-  // ── Mouse move + mouse up (window-level for drag) ─────────────────────────
+  // ── Mouse move + up (drag) ────────────────────────────────────────────────
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -284,37 +272,28 @@ export default function Avatar() {
         if (mouseHistoryRef.current.length > 6) mouseHistoryRef.current.shift();
       }
     };
-
     const onUp = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-
-      // Calculate toss velocity from mouse history
       const hist = mouseHistoryRef.current;
       if (hist.length >= 2) {
-        const first = hist[0];
-        const last = hist[hist.length - 1];
+        const first = hist[0], last = hist[hist.length - 1];
         const dt = (last.t - first.t) / 1000;
         if (dt > 0.01) {
           velocityXRef.current = ((last.x - first.x) / dt) * 0.15;
           velocityYRef.current = ((last.y - first.y) / dt) * 0.008;
         }
       }
-
       stateRef.current = 'falling';
       setCharacterState('falling');
       mouseHistoryRef.current = [];
     };
-
     window.addEventListener('mousemove', onMove, { passive: true });
     window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  // ── Konami code listener ───────────────────────────────────────────────────
+  // ── Konami code ────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -322,49 +301,120 @@ export default function Avatar() {
         konamiIndexRef.current += 1;
         if (konamiIndexRef.current === KONAMI_CODE.length) {
           konamiIndexRef.current = 0;
-          // Activate easter egg — dance party
-          stateRef.current = 'dancing';
-          setCharacterState('dancing');
+          stateRef.current = 'dancing'; setCharacterState('dancing');
           triggerSpeech('CHEAT CODE ACTIVATED');
-          setTimeout(() => {
-            if (stateRef.current === 'dancing') {
-              stateRef.current = 'walking';
-              setCharacterState('walking');
-            }
-          }, 5000);
+          setTimeout(() => { if (stateRef.current === 'dancing') { stateRef.current = 'walking'; setCharacterState('walking'); } }, 5000);
         }
       } else {
         konamiIndexRef.current = e.key === KONAMI_CODE[0] ? 1 : 0;
       }
     };
-
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [triggerSpeech]);
+
+  // ── Chatbot event listener ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const handle = (e: Event) => {
+      const { state } = (e as CustomEvent).detail;
+
+      switch (state) {
+        case 'opened': {
+          // Cancel any teleport in progress
+          if (teleportTimerRef.current) clearTimeout(teleportTimerRef.current);
+          isTeleportingRef.current = false;
+          setPortalVisible(false);
+          setCharacterOpacity(1);
+
+          // Set perch target & start approach
+          chatbotAnchorRef.current = getChatbotPerch();
+          chatbotPhaseRef.current = 'approaching';
+          chatbotAnimRef.current = 'idle';
+          setInChatbotMode(true);
+          triggerSpeech('On my way!');
+          break;
+        }
+        case 'closed': {
+          if (!chatbotPhaseRef.current) break;
+          // Hop out
+          hopStartRef.current = { x: posXRef.current, y: posYRef.current, time: performance.now() };
+          chatbotPhaseRef.current = 'hopping-out';
+          stateRef.current = 'jumping';
+          setCharacterState('jumping');
+
+          // Update platform for landing
+          updateActiveSection();
+          break;
+        }
+        case 'user-typing': {
+          if (chatbotPhaseRef.current === 'active') {
+            chatbotAnimRef.current = 'listening';
+            stateRef.current = 'listening';
+            setCharacterState('listening');
+          }
+          break;
+        }
+        case 'bot-responding': {
+          if (chatbotPhaseRef.current === 'active') {
+            chatbotAnimRef.current = 'thinking';
+            stateRef.current = 'thinking';
+            setCharacterState('thinking');
+            triggerSpeech('Hmm, let me think...');
+          }
+          break;
+        }
+        case 'bot-done': {
+          if (chatbotPhaseRef.current === 'active') {
+            chatbotAnimRef.current = 'talking';
+            stateRef.current = 'talking';
+            setCharacterState('talking');
+            triggerSpeech('Here you go.');
+            setTimeout(() => {
+              if (chatbotPhaseRef.current === 'active' && chatbotAnimRef.current === 'talking') {
+                chatbotAnimRef.current = 'idle';
+                stateRef.current = 'idle';
+                setCharacterState('idle');
+              }
+            }, 3000);
+          }
+          break;
+        }
+        case 'idle': {
+          if (chatbotPhaseRef.current === 'active') {
+            chatbotAnimRef.current = 'idle';
+            stateRef.current = 'idle';
+            setCharacterState('idle');
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('chatbot-state', handle);
+    return () => window.removeEventListener('chatbot-state', handle);
+  }, [triggerSpeech, updateActiveSection]);
 
   // ── Scroll + periodic teleport ─────────────────────────────────────────────
 
   useEffect(() => {
     const handleScroll = () => {
       const newSection = updateActiveSection();
-      if (!isTeleportingRef.current && !isDraggingRef.current && newSection !== activeSectionIdRef.current) {
+      if (!isTeleportingRef.current && !isDraggingRef.current && !chatbotPhaseRef.current && newSection !== activeSectionIdRef.current) {
         activeSectionIdRef.current = newSection;
         executePortalTeleport(newSection);
       }
     };
-
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', updateActiveSection);
 
-    // Initial placement
     updateActiveSection();
     posXRef.current = platformBoundsRef.current.left + 50;
     posYRef.current = platformBoundsRef.current.y;
     triggerSpeech(getTimeGreeting());
 
-    // Periodic teleport
     const interval = setInterval(() => {
-      if (!isTeleportingRef.current && !isDraggingRef.current && Math.random() < 0.5) {
+      if (!isTeleportingRef.current && !isDraggingRef.current && !chatbotPhaseRef.current && Math.random() < 0.5) {
         const sections = ['hero', 'projects', 'experience', 'skills', 'education', 'contact'];
         executePortalTeleport(sections[Math.floor(Math.random() * sections.length)]);
       }
@@ -388,71 +438,175 @@ export default function Avatar() {
       lastTime = now;
 
       const container = containerRef.current;
+      if (!container) { animFrameRef.current = requestAnimationFrame(gameLoop); return; }
+
+      const phase = chatbotPhaseRef.current;
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // CHATBOT MODE
+      // ═══════════════════════════════════════════════════════════════════════
+      if (phase) {
+        const anchor = chatbotAnchorRef.current;
+
+        if (phase === 'approaching') {
+          // Sprint toward the chatbot button area
+          const runTargetX = window.innerWidth - 100;
+          const dx = runTargetX - posXRef.current;
+          const runSpeed = 250;
+
+          walkPhaseRef.current += delta * 16; // fast walk anim
+
+          dirRef.current = dx > 0 ? 'right' : 'left';
+          setDirection(dirRef.current);
+          stateRef.current = 'walking';
+          setCharacterState('walking');
+
+          // Move X toward target
+          if (Math.abs(dx) > 30) {
+            posXRef.current += Math.sign(dx) * runSpeed * delta;
+          } else {
+            // Close enough — begin hop arc to perch
+            hopStartRef.current = { x: posXRef.current, y: posYRef.current, time: now };
+            chatbotAnchorRef.current = getChatbotPerch(); // recalculate in case of resize
+            chatbotPhaseRef.current = 'hopping-in';
+            stateRef.current = 'jumping';
+            setCharacterState('jumping');
+            dirRef.current = 'right';
+            setDirection('right');
+          }
+
+          // Keep Y on current platform while running
+          const { y: groundY } = platformBoundsRef.current;
+          const yDiff = groundY - posYRef.current;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.15;
+
+        } else if (phase === 'hopping-in') {
+          // Smooth arc from current position to chatbot perch
+          const elapsed = (now - hopStartRef.current.time) / 1000;
+          const duration = 0.7;
+          const progress = Math.min(1, elapsed / duration);
+
+          const start = hopStartRef.current;
+          const end = anchor;
+          const peakY = Math.min(start.y, end.y) - 100;
+
+          // Linear X, quadratic bezier Y (arc)
+          const eased = 1 - Math.pow(1 - progress, 2);
+          posXRef.current = start.x + (end.x - start.x) * eased;
+          const t = progress;
+          posYRef.current = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * peakY + t * t * end.y;
+
+          walkPhaseRef.current += delta * 4;
+
+          if (progress >= 1) {
+            posXRef.current = end.x;
+            posYRef.current = end.y;
+            chatbotPhaseRef.current = 'active';
+            stateRef.current = 'idle';
+            setCharacterState('idle');
+            dirRef.current = 'left'; // face toward the chat content
+            setDirection('left');
+            triggerSpeech("I'm here! Ask away.");
+          }
+
+        } else if (phase === 'active') {
+          // Stay anchored at perch, animate based on chatbot state
+          posXRef.current = anchor.x;
+          posYRef.current = anchor.y;
+
+          const anim = chatbotAnimRef.current;
+          if (anim === 'talking' || anim === 'listening') {
+            walkPhaseRef.current += delta * 5;
+          } else if (anim === 'thinking') {
+            walkPhaseRef.current += delta * 2;
+          } else {
+            walkPhaseRef.current += delta * 1.5;
+          }
+
+        } else if (phase === 'hopping-out') {
+          // Arc from perch back toward platform
+          const elapsed = (now - hopStartRef.current.time) / 1000;
+          const duration = 0.6;
+          const progress = Math.min(1, elapsed / duration);
+
+          const start = hopStartRef.current;
+          const { left, right, y: groundY } = platformBoundsRef.current;
+          const endX = Math.max(left, Math.min(right, start.x - 150));
+          const endY = groundY;
+          const peakY = Math.min(start.y, endY) - 80;
+
+          const eased = 1 - Math.pow(1 - progress, 2);
+          posXRef.current = start.x + (endX - start.x) * eased;
+          const t = progress;
+          posYRef.current = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * peakY + t * t * endY;
+
+          walkPhaseRef.current += delta * 4;
+
+          if (progress >= 1) {
+            posXRef.current = endX;
+            posYRef.current = endY;
+            chatbotPhaseRef.current = null;
+            chatbotAnimRef.current = 'idle';
+            setInChatbotMode(false);
+            stateRef.current = 'walking';
+            setCharacterState('walking');
+            dirRef.current = 'left';
+            setDirection('left');
+            triggerSpeech('Back to work.');
+          }
+        }
+
+        container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
+        setWalkPhase(walkPhaseRef.current);
+        const rawOffset = (cursorXRef.current - posXRef.current - 20) / (window.innerWidth * 0.4);
+        setCursorOffset(Math.max(-1, Math.min(1, rawOffset)));
+        animFrameRef.current = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // NORMAL MODE
+      // ═══════════════════════════════════════════════════════════════════════
       const { left, right, y: groundY } = platformBoundsRef.current;
 
-      if (container && !isTeleportingRef.current && !isDraggingRef.current) {
+      if (!isTeleportingRef.current && !isDraggingRef.current) {
         const st = stateRef.current;
 
-        // ── Physics ──
         if (st === 'falling') {
-          // Horizontal velocity + friction
           posXRef.current += velocityXRef.current * delta;
           velocityXRef.current *= 1 - 3 * delta;
           if (Math.abs(velocityXRef.current) < 0.5) velocityXRef.current = 0;
-
-          // Vertical velocity + gravity
           posYRef.current += velocityYRef.current * delta * 120;
           velocityYRef.current += 15 * delta;
-
-          // Wall bounce
           if (posXRef.current < left) { posXRef.current = left; velocityXRef.current = Math.abs(velocityXRef.current) * 0.4; }
           if (posXRef.current > right) { posXRef.current = right; velocityXRef.current = -Math.abs(velocityXRef.current) * 0.4; }
-
-          // Ground collision — bounce or land
           if (posYRef.current >= groundY) {
             posYRef.current = groundY;
-            if (Math.abs(velocityYRef.current) > 2.5) {
-              velocityYRef.current *= -0.35;
-            } else {
-              velocityYRef.current = 0;
-              velocityXRef.current = 0;
-              stateRef.current = 'walking';
-              setCharacterState('walking');
-              isTeleportingRef.current = false;
-            }
+            if (Math.abs(velocityYRef.current) > 2.5) { velocityYRef.current *= -0.35; }
+            else { velocityYRef.current = 0; velocityXRef.current = 0; stateRef.current = 'walking'; setCharacterState('walking'); isTeleportingRef.current = false; }
           }
         } else if (st === 'jumping') {
           posYRef.current += velocityYRef.current * delta * 60;
           velocityYRef.current += 12 * delta;
-          if (velocityYRef.current > 0) {
-            stateRef.current = 'falling';
-            setCharacterState('falling');
-          }
+          if (velocityYRef.current > 0) { stateRef.current = 'falling'; setCharacterState('falling'); }
         } else if (st === 'dancing') {
           walkPhaseRef.current += delta * 12;
           const yDiff = groundY - posYRef.current;
-          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
-          else posYRef.current = groundY;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1; else posYRef.current = groundY;
         } else if (st === 'waving' || st === 'typing' || st === 'thinking' || st === 'idle') {
           walkPhaseRef.current += delta * 3;
           const yDiff = groundY - posYRef.current;
-          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
-          else posYRef.current = groundY;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1; else posYRef.current = groundY;
         } else if (st === 'phone') {
           walkPhaseRef.current += delta * 2;
           const yDiff = groundY - posYRef.current;
-          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
-          else posYRef.current = groundY;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1; else posYRef.current = groundY;
         } else if (st === 'walking') {
           const walkSpeed = 55;
           walkPhaseRef.current += delta * 9;
-
-          // Smooth anchor to ground
           const yDiff = groundY - posYRef.current;
-          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1;
-          else posYRef.current = groundY;
+          if (Math.abs(yDiff) > 1) posYRef.current += yDiff * 0.1; else posYRef.current = groundY;
 
-          // Horizontal movement
           if (dirRef.current === 'right') {
             posXRef.current += walkSpeed * delta;
             if (posXRef.current >= right) { posXRef.current = right; dirRef.current = 'left'; setDirection('left'); }
@@ -461,31 +615,21 @@ export default function Avatar() {
             if (posXRef.current <= left) { posXRef.current = left; dirRef.current = 'right'; setDirection('right'); }
           }
 
-          // Section-specific idle pause
           if (Math.random() < 0.001) {
             const idleState = getSectionIdleState(activeSectionIdRef.current);
-            stateRef.current = idleState;
-            setCharacterState(idleState);
-            setTimeout(() => {
-              if (stateRef.current === idleState) {
-                stateRef.current = 'walking';
-                setCharacterState('walking');
-              }
-            }, 4000);
+            stateRef.current = idleState; setCharacterState(idleState);
+            setTimeout(() => { if (stateRef.current === idleState) { stateRef.current = 'walking'; setCharacterState('walking'); } }, 4000);
           }
         }
 
-        // Update DOM transform
         container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
         setWalkPhase(walkPhaseRef.current);
-
-        // Cursor offset for eye tracking
         const rawOffset = (cursorXRef.current - posXRef.current - 20) / (window.innerWidth * 0.4);
         setCursorOffset(Math.max(-1, Math.min(1, rawOffset)));
       }
 
-      // Handle drag rendering
-      if (isDraggingRef.current && container) {
+      // Drag rendering
+      if (isDraggingRef.current) {
         walkPhaseRef.current += delta * 2;
         container.style.transform = `translate3d(${posXRef.current}px, ${posYRef.current}px, 0)`;
         setWalkPhase(walkPhaseRef.current);
@@ -496,7 +640,7 @@ export default function Avatar() {
 
     animFrameRef.current = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animFrameRef.current);
-  }, []);
+  }, [triggerSpeech]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -504,13 +648,10 @@ export default function Avatar() {
 
   return (
     <>
-      {/* Portal — monochrome spinning square */}
+      {/* Portal */}
       <div
         className="fixed top-0 left-0 z-[100] pointer-events-none transition-all duration-400 ease-out"
-        style={{
-          transform: `translate3d(${portalCoords.x}px, ${portalCoords.y}px, 0)`,
-          opacity: portalVisible ? 1 : 0,
-        }}
+        style={{ transform: `translate3d(${portalCoords.x}px, ${portalCoords.y}px, 0)`, opacity: portalVisible ? 1 : 0 }}
       >
         <div className="relative w-14 h-14 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
           <div className="absolute inset-0 border-[3px] border-black animate-spin" style={{ animationDuration: '1.5s' }} />
@@ -521,7 +662,7 @@ export default function Avatar() {
       {/* Character container */}
       <div
         ref={containerRef}
-        className="fixed top-0 left-0 z-[100] pointer-events-none transition-opacity duration-300"
+        className={`fixed top-0 left-0 pointer-events-none transition-opacity duration-300 ${inChatbotMode ? 'z-[201]' : 'z-[100]'}`}
         style={{ opacity: characterOpacity, willChange: 'transform' }}
       >
         {/* Speech Bubble */}
@@ -529,6 +670,7 @@ export default function Avatar() {
           className={`absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 bg-white border-2 border-black text-[10px] text-black font-bold uppercase tracking-wider transition-all duration-300 ${
             showSpeech ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
           }`}
+          style={{ zIndex: 202 }}
         >
           {speech}
           <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white border-r-2 border-b-2 border-black" />
@@ -540,7 +682,7 @@ export default function Avatar() {
         {/* Interactive character wrapper */}
         <div
           className="relative cursor-grab active:cursor-grabbing"
-          style={{ pointerEvents: 'auto' }}
+          style={{ pointerEvents: chatbotPhaseRef.current ? 'none' : 'auto' }}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onMouseDown={handleMouseDown}

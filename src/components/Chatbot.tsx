@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -13,15 +13,45 @@ export default function Chatbot() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom of chat
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // ── Event dispatching for Avatar integration ───────────────────────────────
+
+  const dispatchChatEvent = useCallback((state: string) => {
+    window.dispatchEvent(new CustomEvent('chatbot-state', { detail: { state } }));
+  }, []);
+
+  // Auto-scroll
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // ── Toggle ─────────────────────────────────────────────────────────────────
+
+  const handleToggle = () => {
+    const next = !isOpen;
+    setIsOpen(next);
+    dispatchChatEvent(next ? 'opened' : 'closed');
+  };
+
+  // ── Input change (typing detection) ────────────────────────────────────────
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    if (value.trim()) {
+      dispatchChatEvent('user-typing');
+      if (typingIdleTimerRef.current) clearTimeout(typingIdleTimerRef.current);
+      typingIdleTimerRef.current = setTimeout(() => dispatchChatEvent('idle'), 2000);
+    } else {
+      dispatchChatEvent('idle');
+    }
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,38 +63,46 @@ export default function Chatbot() {
     setIsLoading(true);
     setError(null);
 
+    // Clear typing timer, signal bot is working
+    if (typingIdleTimerRef.current) clearTimeout(typingIdleTimerRef.current);
+    dispatchChatEvent('bot-responding');
+
     try {
-      const apiMessages = [...messages, { role: 'user', content: userMessage }].filter(m => m.role === 'user' || m.role === 'assistant');
-      
+      const apiMessages = [...messages, { role: 'user', content: userMessage }]
+        .filter(m => m.role === 'user' || m.role === 'assistant');
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch response');
-      }
+      if (!response.ok) throw new Error('Failed to fetch response');
 
       const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (data.error) throw new Error(data.error);
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      dispatchChatEvent('bot-done');
     } catch (err) {
       console.error(err);
       setError('System error. Unable to process request at this time.');
+      dispatchChatEvent('idle');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Cleanup typing timer
+  useEffect(() => {
+    return () => { if (typingIdleTimerRef.current) clearTimeout(typingIdleTimerRef.current); };
+  }, []);
+
   return (
     <div className="fixed bottom-6 right-6 z-[200] flex flex-col items-end pointer-events-none">
-      
+
       {/* Chat Window */}
-      <div 
+      <div
         className={`pointer-events-auto transition-all duration-300 origin-bottom-right mb-4 flex flex-col bg-white border-2 border-black shadow-hard w-[320px] sm:w-[380px] h-[450px] overflow-hidden ${
           isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none'
         }`}
@@ -75,8 +113,8 @@ export default function Chatbot() {
             <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
             <span className="font-mono text-xs font-bold uppercase tracking-widest">Usman's Agent</span>
           </div>
-          <button 
-            onClick={() => setIsOpen(false)}
+          <button
+            onClick={handleToggle}
             className="text-white hover:text-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white p-1"
             aria-label="Close chat"
           >
@@ -90,10 +128,10 @@ export default function Chatbot() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div 
+              <div
                 className={`max-w-[85%] px-4 py-3 text-sm font-medium leading-relaxed border-2 border-black ${
-                  msg.role === 'user' 
-                    ? 'bg-black text-white rounded-tl-xl rounded-tr-xl rounded-bl-xl' 
+                  msg.role === 'user'
+                    ? 'bg-black text-white rounded-tl-xl rounded-tr-xl rounded-bl-xl'
                     : 'bg-white text-black rounded-tl-xl rounded-tr-xl rounded-br-xl'
                 }`}
                 style={{
@@ -104,7 +142,7 @@ export default function Chatbot() {
               </div>
             </div>
           ))}
-          
+
           {isLoading && (
             <div className="flex flex-col items-start">
               <div className="max-w-[85%] px-4 py-3 bg-white text-black border-2 border-black rounded-tl-xl rounded-tr-xl rounded-br-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
@@ -129,15 +167,15 @@ export default function Chatbot() {
 
         {/* Input Area */}
         <form onSubmit={handleSubmit} className="p-3 bg-white border-t-2 border-black flex gap-2">
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Ask a question..."
             className="flex-1 bg-white border-2 border-black px-3 py-2 text-sm font-medium focus:outline-none focus:ring-0 focus:shadow-hard transition-shadow"
             disabled={isLoading}
           />
-          <button 
+          <button
             type="submit"
             disabled={isLoading || !inputValue.trim()}
             className="bg-black text-white px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider hover:bg-white hover:text-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -149,7 +187,7 @@ export default function Chatbot() {
 
       {/* Toggle Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         className="pointer-events-auto group flex items-center justify-center w-14 h-14 bg-black text-white border-2 border-black shadow-hard hover:shadow-hard-hover hover:-translate-y-1 transition-all duration-200"
         aria-label="Toggle chat"
       >
@@ -163,7 +201,6 @@ export default function Chatbot() {
           </svg>
         )}
       </button>
-
     </div>
   );
 }
