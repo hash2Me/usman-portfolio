@@ -377,12 +377,12 @@ export default function Avatar() {
       >
         {/* Speech Bubble */}
         <div
-          className={`absolute -top-16 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 rounded-xl bg-slate-900/95 border border-white/30 backdrop-blur-md text-xs text-white font-mono shadow-2xl transition-all duration-300 ${
+          className={`absolute -top-16 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-2 bg-white border-2 border-black text-xs text-black font-bold uppercase tracking-wider shadow-hard-sm transition-all duration-300 ${
             showSpeech ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90'
           }`}
         >
           {speech}
-          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-slate-900/95 border-r border-b border-white/30" />
+          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white border-r-2 border-b-2 border-black" />
         </div>
 
         {/* Character Ground Shadow */}

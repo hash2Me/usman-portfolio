@@ -15,33 +15,33 @@ export default function Contact() {
   const { ref, isVisible } = useScrollReveal();
 
   return (
-    <section id="contact" className="section relative border-t border-white/10 pb-32">
+    <section id="contact" className="section relative border-t-4 border-black pb-32 bg-white">
       <div ref={ref} className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-        <div className="max-w-2xl relative z-10 mb-12">
+        <div className="max-w-2xl relative z-10 mb-16">
           <div className="inline-flex items-center gap-2 mb-4">
-            <span className={`h-px bg-white transition-all duration-1000 ${isVisible ? 'w-8' : 'w-0'}`}></span>
-            <p className="font-mono text-sm text-white uppercase tracking-widest">06 — Contact</p>
+            <span className={`h-1 bg-black transition-all duration-1000 ${isVisible ? 'w-12' : 'w-0'}`}></span>
+            <p className="font-mono text-sm font-bold text-black uppercase tracking-widest">06 — Contact</p>
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Let's Connect</h2>
-          <p className="text-lg text-slate-400 leading-relaxed">
+          <h2 className="text-4xl md:text-6xl font-black text-black mb-6 uppercase tracking-tighter">Let's Connect</h2>
+          <p className="text-xl text-black font-medium leading-relaxed">
             Open to frontend engineering roles and internships where I can apply
             both systems-level thinking and production React experience. Feel
             free to reach out directly.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4 max-w-2xl relative z-10">
+        <div className="grid sm:grid-cols-2 gap-6 max-w-3xl relative z-10">
           {CONTACT_LINKS.map((link, i) => (
             <a
               key={link.label}
               href={link.href}
               target={link.href.startsWith('http') ? '_blank' : undefined}
               rel={link.href.startsWith('http') ? 'noreferrer' : undefined}
-              className={`card p-6 flex flex-col gap-2 hover:border-white hover:-translate-y-2 hover:shadow-glow transition-all duration-300 group ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}
+              className={`card p-8 flex flex-col gap-3 group ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}
               style={{ transitionDelay: isVisible ? `${(i + 1) * 100}ms` : '0ms' }}
             >
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-white transition-colors">{link.label}</span>
-              <span className="text-base text-white transition-colors">{link.value}</span>
+              <span className="text-sm font-black uppercase tracking-widest text-black group-hover:underline">{link.label}</span>
+              <span className="text-lg font-bold text-black break-all">{link.value}</span>
             </a>
           ))}
         </div>

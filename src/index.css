@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,15 +10,15 @@
   }
 
   body {
-    @apply bg-slate-950 text-slate-300 font-sans selection:bg-white/20 selection:text-white;
+    @apply bg-white text-black font-sans selection:bg-black selection:text-white;
   }
 
   h1, h2, h3, h4 {
-    @apply font-semibold text-white tracking-tight;
+    @apply font-black text-black tracking-tight;
   }
 
   a:focus-visible, button:focus-visible {
-    @apply outline-none ring-2 ring-white ring-offset-2 ring-offset-slate-950;
+    @apply outline-none ring-2 ring-black ring-offset-2 ring-offset-white;
   }
 
   code, pre {
@@ -32,19 +32,19 @@
   }
 
   .card {
-    @apply relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-glass hover:border-white/30 hover:bg-white/10 hover:-translate-y-1 transition-all duration-300;
+    @apply relative overflow-hidden bg-white border-2 border-black shadow-hard hover:shadow-hard-hover hover:-translate-y-1 transition-all duration-200;
   }
 
   .badge {
-    @apply inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-white/10 text-white border border-white/20 backdrop-blur-sm;
+    @apply inline-flex items-center px-3 py-1.5 text-xs font-bold bg-white text-black border-2 border-black;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 rounded-full bg-white text-slate-950 text-sm font-semibold hover:shadow-glow-strong hover:scale-105 transition-all duration-300;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-black text-white text-sm font-bold border-2 border-black hover:bg-white hover:text-black hover:shadow-hard transition-all duration-200;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 rounded-full border border-white/30 bg-transparent text-white text-sm font-semibold hover:bg-white/10 hover:scale-105 backdrop-blur-sm transition-all duration-300;
+    @apply inline-flex items-center justify-center px-6 py-3 bg-white text-black text-sm font-bold border-2 border-black hover:shadow-hard transition-all duration-200;
   }
 }
 

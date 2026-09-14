@@ -5,34 +5,32 @@ export default function Experience() {
   const { ref, isVisible } = useScrollReveal();
 
   return (
-    <section id="experience" className="section relative border-t border-white/10">
-      <div className="absolute top-1/2 left-0 w-1/3 h-1/3 bg-slate-500/10 rounded-full mix-blend-screen filter blur-[100px] pointer-events-none"></div>
-
+    <section id="experience" className="section relative border-t-4 border-black bg-white">
       <div ref={ref} className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-        <div className="max-w-2xl relative z-10 mb-12">
+        <div className="max-w-2xl relative z-10 mb-16">
           <div className="inline-flex items-center gap-2 mb-4">
-            <span className={`h-px bg-white transition-all duration-1000 ${isVisible ? 'w-8' : 'w-0'}`}></span>
-            <p className="font-mono text-sm text-white uppercase tracking-widest">03 — Experience</p>
+            <span className={`h-1 bg-black transition-all duration-1000 ${isVisible ? 'w-12' : 'w-0'}`}></span>
+            <p className="font-mono text-sm font-bold text-black uppercase tracking-widest">03 — Experience</p>
           </div>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">Work Experience</h2>
+          <h2 className="text-4xl md:text-5xl lg:text-7xl font-black text-black mb-6 uppercase tracking-tighter">Work Experience</h2>
         </div>
 
-        <ol className="relative border-l-2 border-white/20 pl-8 space-y-12 max-w-4xl relative z-10">
+        <ol className="relative border-l-4 border-black pl-8 md:pl-12 space-y-16 max-w-4xl relative z-10">
           {experience.map((item, i) => (
-            <li key={item.org} className={`relative group transition-all duration-700 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`} style={{ transitionDelay: isVisible ? `${(i + 1) * 200}ms` : '0ms' }}>
-              <span className="absolute -left-[calc(2rem+9px)] top-1.5 w-4 h-4 rounded-full bg-slate-950 border-2 border-white group-hover:bg-white transition-colors shadow-glow" />
+            <li key={item.org} className={`relative group transition-all duration-700 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-12'}`} style={{ transitionDelay: isVisible ? `${(i + 1) * 200}ms` : '0ms' }}>
+              <span className="absolute -left-[calc(2rem+11px)] md:-left-[calc(3rem+11px)] top-2 w-5 h-5 bg-white border-4 border-black group-hover:bg-black transition-colors" />
               
-              <div className="card p-6 md:p-8 ml-2 group-hover:border-white/50 transition-colors">
-                <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-2 mb-2">
-                  <h3 className="text-xl font-bold text-white transition-colors">{item.role}</h3>
-                  <span className="font-mono text-sm text-slate-950 bg-white px-3 py-1 rounded-full">{item.period}</span>
+              <div className="card p-6 md:p-8 ml-2">
+                <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-4 mb-4">
+                  <h3 className="text-2xl font-black text-black uppercase tracking-tight">{item.role}</h3>
+                  <span className="font-mono text-xs font-bold text-white bg-black px-3 py-1.5 uppercase tracking-widest border-2 border-black">{item.period}</span>
                 </div>
-                <p className="text-base font-medium text-slate-400 mb-5">{item.org}</p>
+                <p className="text-lg font-bold text-black mb-6 uppercase tracking-wider">{item.org}</p>
                 
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {item.points.map((pt) => (
-                    <li key={pt} className="flex gap-3 text-sm text-slate-300 leading-relaxed">
-                      <span className="text-white mt-0.5 shrink-0" aria-hidden="true">▸</span>
+                    <li key={pt} className="flex gap-3 text-base text-slate-700 leading-relaxed font-medium">
+                      <span className="text-black mt-0.5 shrink-0" aria-hidden="true">■</span>
                       {pt}
                     </li>
                   ))}

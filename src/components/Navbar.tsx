@@ -29,7 +29,7 @@ export default function Navbar() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-slate-950/70 backdrop-blur-md border-b border-white/10 shadow-glass py-2' : 'bg-transparent py-4'
+        scrolled ? 'bg-white border-b-2 border-black py-3' : 'bg-transparent py-4'
       }`}
     >
       <nav
@@ -38,9 +38,9 @@ export default function Navbar() {
       >
         <a
           href="#top"
-          className="font-mono text-base font-bold text-white tracking-tight hover:scale-105 transition-transform"
+          className="font-mono text-xl font-black text-black tracking-tighter hover:-translate-y-1 transition-transform inline-block"
         >
-          usman<span className="text-white animate-pulse">_</span>
+          usman<span className="text-black animate-pulse">_</span>
         </a>
 
         {/* Desktop nav */}
@@ -49,7 +49,7 @@ export default function Navbar() {
             <li key={link.href}>
               <a
                 href={link.href}
-                className="text-sm font-medium text-slate-300 hover:text-white hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all"
+                className="text-sm font-bold text-black uppercase tracking-widest hover:bg-black hover:text-white px-2 py-1 transition-colors"
               >
                 {link.label}
               </a>
@@ -62,24 +62,24 @@ export default function Navbar() {
             href="https://github.com/hash2Me"
             target="_blank"
             rel="noreferrer"
-            className="text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            className="text-sm font-bold text-black uppercase tracking-widest hover:bg-black hover:text-white px-2 py-1 transition-colors"
           >
             GitHub
           </a>
-          <a href="#contact" className="btn-primary py-2 px-5 text-xs">
+          <a href="#contact" className="btn-primary py-2 px-5 text-xs uppercase tracking-widest">
             Contact
           </a>
         </div>
 
         {/* Mobile toggle */}
         <button
-          className="md:hidden p-2 -mr-2 text-slate-300 hover:text-white transition-colors"
+          className="md:hidden p-2 -mr-2 text-black hover:bg-black hover:text-white transition-colors border-2 border-transparent hover:border-black"
           aria-label={isOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={isOpen}
           aria-controls="mobile-menu"
           onClick={() => setIsOpen((v) => !v)}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
             {isOpen ? (
               <path d="M6 6l12 12M6 18L18 6" strokeLinecap="round" strokeLinejoin="round" />
             ) : (
@@ -91,14 +91,14 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {isOpen && (
-        <div id="mobile-menu" className="md:hidden absolute top-full left-0 w-full bg-slate-900/95 backdrop-blur-xl border-b border-white/10 shadow-2xl">
+        <div id="mobile-menu" className="md:hidden absolute top-full left-0 w-full bg-white border-b-2 border-black">
           <ul className="flex flex-col px-6 py-6 gap-2">
             {NAV_LINKS.map((link) => (
               <li key={link.href}>
                 <a
                   href={link.href}
                   onClick={() => setIsOpen(false)}
-                  className="block py-3 text-base font-medium text-slate-200 hover:text-white hover:bg-white/5 rounded-lg px-4 transition-colors"
+                  className="block py-3 text-base font-bold text-black uppercase tracking-widest hover:bg-black hover:text-white rounded-none px-4 transition-colors"
                 >
                   {link.label}
                 </a>
@@ -109,7 +109,7 @@ export default function Navbar() {
                 href="https://github.com/hash2Me"
                 target="_blank"
                 rel="noreferrer"
-                className="block py-3 text-base font-medium text-slate-200 hover:text-white hover:bg-white/5 rounded-lg px-4 transition-colors"
+                className="block py-3 text-base font-bold text-black uppercase tracking-widest hover:bg-black hover:text-white rounded-none px-4 transition-colors"
               >
                 GitHub
               </a>
@@ -118,7 +118,7 @@ export default function Navbar() {
               <a
                 href="#contact"
                 onClick={() => setIsOpen(false)}
-                className="btn-primary w-full"
+                className="btn-primary w-full uppercase tracking-widest"
               >
                 Contact
               </a>
