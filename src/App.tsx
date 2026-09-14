@@ -8,6 +8,7 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import AnimatedBackground from './components/AnimatedBackground';
 import Avatar from './components/Avatar';
+import Chatbot from './components/Chatbot';
 
 export default function App() {
   return (
@@ -38,6 +39,9 @@ export default function App() {
       </main>
 
       <Footer />
+      
+      {/* AI Chatbot */}
+      <Chatbot />
     </div>
   );
 }
