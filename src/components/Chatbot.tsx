@@ -8,7 +8,7 @@ type Message = {
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "Hello. I am Usman's AI assistant. Ask me anything about his engineering background, skills, or projects." }
+    { role: 'assistant', content: "Hey! 👋 I'm Usman's portfolio bot. Ask me about his projects, skills, or what he's building right now!" }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -53,11 +53,10 @@ export default function Chatbot() {
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
-    const userMessage = inputValue.trim();
+    const userMessage = text.trim();
     setInputValue('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
@@ -86,11 +85,16 @@ export default function Chatbot() {
       dispatchChatEvent('bot-done');
     } catch (err) {
       console.error(err);
-      setError('System error. Unable to process request at this time.');
+      setError('Oops, something went sideways! Try asking again.');
       dispatchChatEvent('idle');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(inputValue);
   };
 
   // Cleanup typing timer
@@ -129,7 +133,7 @@ export default function Chatbot() {
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div
-                className={`max-w-[85%] px-4 py-3 text-sm font-medium leading-relaxed border-2 border-black ${
+                className={`max-w-[85%] px-4 py-3 text-sm font-medium leading-relaxed border-2 border-black whitespace-pre-wrap ${
                   msg.role === 'user'
                     ? 'bg-black text-white rounded-tl-xl rounded-tr-xl rounded-bl-xl'
                     : 'bg-white text-black rounded-tl-xl rounded-tr-xl rounded-br-xl'
@@ -162,6 +166,32 @@ export default function Chatbot() {
               </div>
             </div>
           )}
+          {/* Interactive quick prompt suggestions */}
+          {!isLoading && messages.length <= 3 && (
+            <div className="pt-2">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold mb-1.5">
+                Quick Questions
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  'What does Usman build?',
+                  'Tell me about the Zombie game!',
+                  'What tech stack does he love?',
+                  'Where does he work?'
+                ].map((prompt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => sendMessage(prompt)}
+                    className="text-xs bg-white text-black border border-black px-2.5 py-1 font-semibold rounded-md hover:bg-black hover:text-white transition-colors text-left shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -171,7 +201,7 @@ export default function Chatbot() {
             type="text"
             value={inputValue}
             onChange={handleInputChange}
-            placeholder="Ask a question..."
+            placeholder="Ask anything about Usman..."
             className="flex-1 bg-white border-2 border-black px-3 py-2 text-sm font-medium focus:outline-none focus:ring-0 focus:shadow-hard transition-shadow"
             disabled={isLoading}
           />
