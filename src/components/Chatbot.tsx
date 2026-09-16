@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { getClientAssistantReply } from '../utils/assistantKnowledge';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -70,23 +71,37 @@ export default function Chatbot() {
       const apiMessages = [...messages, { role: 'user', content: userMessage }]
         .filter(m => m.role === 'user' || m.role === 'assistant');
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
-      });
+      let replyText: string | null = null;
 
-      if (!response.ok) throw new Error('Failed to fetch response');
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
 
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.reply) {
+            replyText = data.reply;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Network / API fetch failed, falling back to local assistant knowledge:', fetchErr);
+      }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      // If backend API returned an error, wasn't deployed, or timed out, use local intelligence
+      if (!replyText) {
+        replyText = getClientAssistantReply(userMessage);
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', content: replyText! }]);
       dispatchChatEvent('bot-done');
     } catch (err) {
-      console.error(err);
-      setError('Oops, something went sideways! Try asking again.');
-      dispatchChatEvent('idle');
+      console.error('Chat error:', err);
+      const fallback = getClientAssistantReply(userMessage);
+      setMessages(prev => [...prev, { role: 'assistant', content: fallback }]);
+      dispatchChatEvent('bot-done');
     } finally {
       setIsLoading(false);
     }

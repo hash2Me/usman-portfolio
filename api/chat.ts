@@ -40,40 +40,63 @@ GUARDRAILS:
 - Never fabricate info.`;
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), { status: 500 });
+    if (apiKey) {
+      try {
+        const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 600,
+            system: systemPrompt,
+            messages: messages,
+          }),
+        });
+
+        if (anthropicResponse.ok) {
+          const data = await anthropicResponse.json();
+          const replyText = data.content?.[0]?.text;
+          if (replyText) {
+            return new Response(JSON.stringify({ reply: replyText }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Anthropic API request failed, utilizing fallback responder:', err);
+      }
     }
 
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 600,
-        system: systemPrompt,
-        messages: messages,
-      }),
-    });
+    // Knowledge fallback responder for Vercel edge deployment without API key
+    const lastMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
+    let fallbackReply = "Hey there! I'm Usman's portfolio AI buddy. Usman is a Software Engineering student & Frontend Engineer at Quantum Logic Limited obsessed with custom DSA and React! Want to hear about his Zombie game or web apps?";
 
-    if (!anthropicResponse.ok) {
-      const errorText = await anthropicResponse.text();
-      console.error('Anthropic API Error:', anthropicResponse.status, errorText);
-      return new Response(JSON.stringify({ error: 'Upstream API error' }), { status: 502 });
+    if (lastMsg.includes('project') || lastMsg.includes('zombie') || lastMsg.includes('maze') || lastMsg.includes('game') || lastMsg.includes('siege') || lastMsg.includes('build')) {
+      fallbackReply = "Usman built **Zombie Maze Siege**—a 2D survival game in C++17 with 6 custom DSA structures (no STL shortcuts!) and BFS zombie pathfinding! He also created a React E-Commerce Dashboard and a Task Manager. Want to know more about the zombie game?";
+    } else if (lastMsg.includes('skill') || lastMsg.includes('tech') || lastMsg.includes('stack') || lastMsg.includes('language') || lastMsg.includes('dsa')) {
+      fallbackReply = "His core stack is **React, React Native, and Tailwind** for frontend, plus **C++, Java, and Python** with deep DSA problem-solving. Interested in his frontend work or low-level algorithms?";
+    } else if (lastMsg.includes('experience') || lastMsg.includes('work') || lastMsg.includes('job') || lastMsg.includes('quantum') || lastMsg.includes('company')) {
+      fallbackReply = "He's currently working as a **Frontend Engineer (UI/UX)** at **Quantum Logic Limited**, crafting responsive user interfaces and optimizing web apps. Want to know about what he works on day-to-day?";
+    } else if (lastMsg.includes('education') || lastMsg.includes('degree') || lastMsg.includes('university') || lastMsg.includes('college') || lastMsg.includes('comsats')) {
+      fallbackReply = "Usman is studying **Software Engineering at COMSATS Lahore** (currently 3rd semester), taking deep dives into Data Structures, SQA, and algorithms. Curious about his courses?";
+    } else if (lastMsg.includes('contact') || lastMsg.includes('hire') || lastMsg.includes('email') || lastMsg.includes('reach') || lastMsg.includes('github') || lastMsg.includes('linkedin')) {
+      fallbackReply = "You can ping Usman directly via the Contact section below, or check out his GitHub and LinkedIn in the links above! Ready to drop him a message?";
     }
 
-    const data = await anthropicResponse.json();
-    const replyText = data.content[0].text;
-
-    return new Response(JSON.stringify({ reply: replyText }), {
+    return new Response(JSON.stringify({ reply: fallbackReply }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('Chat endpoint error:', err);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ reply: "Hey! Usman's currently building slick web apps at Quantum Logic Limited and hacking on C++ games. What would you like to check out first?" }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
